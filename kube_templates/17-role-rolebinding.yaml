@@ -1,0 +1,150 @@
+apiVersion: rbac.authorization.k8s.io/v1  # API version for Role resource (rbac.authorization.k8s.io/v1 is the stable version)
+kind: Role                                # Resource type - Role defines permissions within a namespace
+metadata:                                 # Metadata section - contains identifying information
+  name: pod-reader                       # Name of the Role (must be unique within namespace)
+  namespace: default                     # Namespace where Role will be created (required, scoped to namespace)
+  labels:                                # Labels are key-value pairs used for selecting and organizing resources
+    rbac: pod-reader                     # Label: RBAC resource type
+  annotations:                           # Annotations are metadata that don't affect resource behavior
+    description: "Role for reading pods"  # Custom annotation: human-readable description
+rules:                                   # List of policy rules (required)
+- apiGroups:                             # API groups this rule applies to
+  - ""                                   # Empty string means core API group
+  - apps                                 # Apps API group (for Deployments, ReplicaSets, etc.)
+  resources:                             # Resources this rule applies to
+  - pods                                 # Resource: pods
+  - deployments                          # Resource: deployments
+  - services                             # Resource: services
+  verbs:                                 # Verbs (actions) allowed on resources
+  - get                                  # Verb: get (read single resource)
+  - list                                 # Verb: list (list resources)
+  - watch                                # Verb: watch (watch for changes)
+  - create                               # Verb: create (create new resources)
+  - update                               # Verb: update (update existing resources)
+  - patch                                # Verb: patch (partial update)
+  - delete                               # Verb: delete (delete resources)
+  resourceNames:                         # Specific resource names (optional)
+  - my-pod                               # Only applies to resource named "my-pod"
+  - my-deployment                        # Only applies to resource named "my-deployment"
+- apiGroups:                             # Another rule for different API group
+  - ""                                   # Core API group
+  resources:                             # Resources
+  - configmaps                           # Resource: configmaps
+  - secrets                              # Resource: secrets
+  verbs:                                 # Verbs
+  - get                                  # Verb: get
+  - list                                 # Verb: list
+  - watch                                # Verb: watch
+- apiGroups:                             # Rule for non-resource URLs (optional)
+  - ""                                   # Core API group
+  nonResourceURLs:                       # Non-resource URLs (optional)
+  - /api/v1                              # API path
+  - /healthz                              # Health check endpoint
+  verbs:                                 # Verbs for non-resource URLs
+  - get                                  # Verb: get
+  - post                                 # Verb: post
+
+---
+# Example: Role for reading pods only
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pod-reader-only
+  namespace: default
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
+
+---
+# Example: Role for managing deployments
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: deployment-manager
+  namespace: default
+rules:
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - apps
+  resources:
+  - deployments/status
+  verbs:
+  - get
+  - update
+  - patch
+
+---
+# Example: RoleBinding - binds Role to subjects (users, groups, service accounts)
+apiVersion: rbac.authorization.k8s.io/v1  # API version for RoleBinding resource
+kind: RoleBinding                         # Resource type - RoleBinding grants Role permissions to subjects
+metadata:                                 # Metadata section - contains identifying information
+  name: pod-reader-binding               # Name of the RoleBinding (must be unique within namespace)
+  namespace: default                     # Namespace where RoleBinding will be created (required, scoped to namespace)
+  labels:                                # Labels are key-value pairs used for selecting and organizing resources
+    rbac: pod-reader-binding             # Label: RBAC resource type
+  annotations:                           # Annotations are metadata that don't affect resource behavior
+    description: "Binding pod-reader role to service account"  # Custom annotation
+roleRef:                                 # Reference to Role or ClusterRole (required)
+  apiGroup: rbac.authorization.k8s.io   # API group of the role
+  kind: Role                             # Kind: Role (namespace-scoped) or ClusterRole (cluster-scoped)
+  name: pod-reader                       # Name of the Role or ClusterRole
+subjects:                                # List of subjects to grant permissions to (required)
+- kind: ServiceAccount                   # Subject kind: ServiceAccount, User, or Group
+  name: my-serviceaccount                # Subject name
+  namespace: default                    # Namespace (required for ServiceAccount, optional for User/Group)
+- kind: User                             # Another subject: User
+  name: alice@example.com                # User name (typically email or username)
+  apiGroup: rbac.authorization.k8s.io   # API group (for User/Group)
+- kind: Group                            # Another subject: Group
+  name: developers                       # Group name
+  apiGroup: rbac.authorization.k8s.io   # API group
+
+---
+# Example: RoleBinding for ServiceAccount
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: deployment-manager-binding
+  namespace: default
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: deployment-manager
+subjects:
+- kind: ServiceAccount
+  name: deployment-sa
+  namespace: default
+
+---
+# Example: RoleBinding using ClusterRole (common pattern)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cluster-admin-binding
+  namespace: default
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole                    # Can reference ClusterRole
+  name: cluster-admin                  # ClusterRole name
+subjects:
+- kind: ServiceAccount
+  name: admin-sa
+  namespace: default
+

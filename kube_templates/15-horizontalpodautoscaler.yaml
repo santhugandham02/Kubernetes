@@ -1,0 +1,257 @@
+apiVersion: autoscaling/v2          # API version for HorizontalPodAutoscaler resource (autoscaling/v2 is the stable version)
+kind: HorizontalPodAutoscaler       # Resource type - HPA automatically scales pods based on observed metrics
+metadata:                            # Metadata section - contains identifying information
+  name: nginx-hpa                   # Name of the HPA (must be unique within namespace)
+  namespace: default                # Namespace where HPA will be created (optional, defaults to 'default')
+  labels:                           # Labels are key-value pairs used for selecting and organizing resources
+    app: nginx                      # Label: application name
+    autoscaler: hpa                 # Label: autoscaler type
+  annotations:                      # Annotations are metadata that don't affect resource behavior
+    description: "Nginx HPA"        # Custom annotation: human-readable description
+spec:                                # Specification section - defines desired state
+  scaleTargetRef:                   # Reference to the resource to scale (required)
+    apiVersion: apps/v1             # API version of target resource (optional, defaults to apps/v1 for Deployment)
+    kind: Deployment                # Kind of target resource: Deployment, ReplicaSet, StatefulSet, etc.
+    name: nginx-deployment          # Name of target resource (must exist in same namespace)
+  minReplicas: 3                    # Minimum number of replicas (default: 1)
+                                    # HPA will never scale below this number
+  maxReplicas: 10                   # Maximum number of replicas (required)
+                                    # HPA will never scale above this number
+  metrics:                          # List of metrics to use for scaling (optional)
+                                    # If omitted, uses CPU utilization (default: 80% of requested)
+  - type: Resource                  # Metric type: Resource, Pods, Object, External, ContainerResource
+    resource:                       # Resource metric (CPU or memory)
+      name: cpu                     # Resource name: cpu or memory
+      target:                       # Target value for the metric
+        type: Utilization           # Target type: Utilization (percentage) or AverageValue (absolute)
+        averageUtilization: 70     # Target CPU utilization percentage (0-100)
+                                    # HPA will scale to maintain this CPU utilization
+  - type: Resource                  # Another resource metric
+    resource:
+      name: memory                  # Resource name: memory
+      target:
+        type: AverageValue          # Target type: AverageValue (absolute value)
+        averageValue: "500Mi"      # Target memory value (500 mebibytes)
+                                    # HPA will scale to maintain this average memory usage
+  - type: Pods                      # Pods metric (Kubernetes 1.23+)
+    pods:                           # Pods metric
+      metric:                       # Metric selector
+        name: packets-per-second    # Metric name
+      target:                       # Target value
+        type: AverageValue          # Target type: AverageValue
+        averageValue: "1000"       # Target value (1000 packets per second)
+  - type: Object                    # Object metric
+    object:                         # Object metric
+      describedObject:              # Object to describe
+        apiVersion: v1              # API version
+        kind: Service              # Kind: Service, Pod, etc.
+        name: nginx-service         # Object name
+      metric:                       # Metric selector
+        name: requests-per-second   # Metric name
+      target:                       # Target value
+        type: Value                # Target type: Value or AverageValue
+        value: "100"               # Target value (100 requests per second)
+  - type: External                  # External metric (from external system)
+    external:                       # External metric
+      metric:                       # Metric selector
+        name: queue_length         # Metric name
+        selector:                   # Label selector (optional)
+          matchLabels:
+            queue: "worker-queue"  # Match label
+      target:                       # Target value
+        type: AverageValue         # Target type: AverageValue
+        averageValue: "30"         # Target value (30 items in queue)
+  - type: ContainerResource        # Container resource metric (Kubernetes 1.27+)
+    containerResource:              # Container resource metric
+      name: cpu                    # Resource name: cpu or memory
+      container: nginx             # Container name
+      target:                      # Target value
+        type: Utilization          # Target type: Utilization or AverageValue
+        averageUtilization: 80     # Target CPU utilization percentage
+  behavior:                        # Scaling behavior (optional, Kubernetes 1.18+)
+    scaleDown:                     # Scale down behavior
+      stabilizationWindowSeconds: 300  # Stabilization window in seconds (default: 300)
+                                    # HPA waits this long before scaling down
+      policies:                    # Scaling policies
+      - type: Percent              # Policy type: Percent or Pods
+        value: 50                 # Scale down by 50% of current replicas
+        periodSeconds: 60         # Period in seconds
+      - type: Pods                 # Another policy
+        value: 2                  # Scale down by 2 pods
+        periodSeconds: 60         # Period in seconds
+      selectPolicy: Min            # Policy selection: Min (use minimum), Max (use maximum), Disabled
+    scaleUp:                       # Scale up behavior
+      stabilizationWindowSeconds: 0  # Stabilization window in seconds (default: 0)
+                                    # HPA waits this long before scaling up
+      policies:                    # Scaling policies
+      - type: Percent              # Policy type: Percent or Pods
+        value: 100                # Scale up by 100% of current replicas (double)
+        periodSeconds: 15         # Period in seconds
+      - type: Pods                 # Another policy
+        value: 4                  # Scale up by 4 pods
+        periodSeconds: 15         # Period in seconds
+      selectPolicy: Max            # Policy selection: Max (use maximum), Min (use minimum), Disabled
+      # Note: selectPolicy Max means use the policy that scales the most
+
+---
+# Example: Simple HPA with CPU scaling only
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: simple-hpa
+  namespace: default
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: nginx-deployment
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 80
+
+---
+# Example: HPA with multiple metrics (CPU and memory)
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: multi-metric-hpa
+  namespace: default
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: nginx-deployment
+  minReplicas: 3
+  maxReplicas: 20
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: AverageValue
+        averageValue: "512Mi"
+  # Note: HPA scales based on the metric that requires the most replicas
+
+---
+# Example: HPA with custom scaling behavior
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: custom-behavior-hpa
+  namespace: default
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: nginx-deployment
+  minReplicas: 5
+  maxReplicas: 50
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 75
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 600  # Wait 10 minutes before scaling down
+      policies:
+      - type: Percent
+        value: 10                      # Scale down by 10% at a time
+        periodSeconds: 60              # Every minute
+      selectPolicy: Min                # Use the policy that scales down the least
+    scaleUp:
+      stabilizationWindowSeconds: 0    # Scale up immediately
+      policies:
+      - type: Percent
+        value: 100                     # Scale up by 100% (double)
+        periodSeconds: 30              # Every 30 seconds
+      - type: Pods
+        value: 5                       # Or scale up by 5 pods
+        periodSeconds: 30              # Every 30 seconds
+      selectPolicy: Max                # Use the policy that scales up the most
+
+---
+# Example: HPA with external metrics
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: external-metric-hpa
+  namespace: default
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: worker-deployment
+  minReplicas: 1
+  maxReplicas: 100
+  metrics:
+  - type: External
+    external:
+      metric:
+        name: queue_length
+        selector:
+          matchLabels:
+            queue: "worker-queue"
+      target:
+        type: AverageValue
+        averageValue: "10"           # Target: 10 items per pod
+
+---
+# Example: HPA for StatefulSet
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: statefulset-hpa
+  namespace: default
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: StatefulSet                # Target: StatefulSet
+    name: mysql-statefulset
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+
+---
+# Example: HPA with ContainerResource metrics (Kubernetes 1.27+)
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: container-resource-hpa
+  namespace: default
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: multi-container-deployment
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: ContainerResource
+    containerResource:
+      name: cpu
+      container: app                # Container name (for multi-container pods)
+      target:
+        type: Utilization
+        averageUtilization: 80
+

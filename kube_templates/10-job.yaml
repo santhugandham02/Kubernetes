@@ -1,0 +1,160 @@
+apiVersion: batch/v1                 # API version for Job resource (batch/v1 is the stable version)
+kind: Job                            # Resource type - Job runs a task to completion (one or more pods)
+metadata:                            # Metadata section - contains identifying information
+  name: pi-job                      # Name of the Job (must be unique within namespace)
+  namespace: default                # Namespace where Job will be created (optional, defaults to 'default')
+  labels:                           # Labels are key-value pairs used for selecting and organizing resources
+    app: calculator                 # Label: application name
+    job-type: batch                 # Label: job type
+  annotations:                      # Annotations are metadata that don't affect resource behavior
+    description: "Calculate pi value"  # Custom annotation: human-readable description
+spec:                                # Specification section - defines desired state
+  completions: 1                    # Number of successful completions required (default: 1)
+                                    # Job is complete when this many pods complete successfully
+  parallelism: 1                    # Number of pods to run in parallel (default: 1)
+                                    # Maximum number of pods running simultaneously
+  backoffLimit: 6                   # Number of retries before marking job as failed (default: 6)
+                                    # If a pod fails, Job will retry up to this many times
+  activeDeadlineSeconds: 3600      # Maximum seconds job can be active (optional)
+                                    # Job will be terminated if it exceeds this duration
+  ttlSecondsAfterFinished: 100      # Seconds to keep completed/failed job before auto-deletion (optional, Kubernetes 1.12+)
+                                    # After job completes/fails, it will be deleted after this many seconds
+                                    # Set to 0 to delete immediately, omit to keep indefinitely
+  completionMode: NonIndexed        # Completion mode: NonIndexed (default) or Indexed (Kubernetes 1.24+)
+                                    # NonIndexed: pods complete in any order
+                                    # Indexed: pods complete in order (0, 1, 2, ...)
+  suspend: false                    # Suspend job execution (default: false, Kubernetes 1.21+)
+                                    # When true, job will not create new pods until resumed
+  podFailurePolicy:                 # Pod failure policy (optional, Kubernetes 1.25+)
+    rules:                          # Rules for handling pod failures
+    - action: FailJob               # Action: FailJob, Ignore, Count (for Indexed jobs)
+      onExitCodes:                  # Match specific exit codes
+        containerName: pi           # Container name (optional, applies to all if omitted)
+        operator: In                # Operator: In, NotIn
+        values:                     # Exit code values
+        - 1                         # Exit code 1
+        - 2                         # Exit code 2
+    - action: Ignore                # Action: Ignore (don't count as failure)
+      onPodConditions:             # Match pod conditions
+      - type: DisruptionTarget     # Pod condition type: DisruptionTarget, etc.
+  selector:                         # Label selector (optional, auto-generated if omitted)
+    matchLabels:                    # Match pods with exact label matches
+      app: calculator               # Pods must have label app=calculator
+  template:                         # Pod template - defines how pods should be created
+    metadata:                       # Metadata for pods created from this template
+      labels:                       # Labels applied to pods (must match selector if specified)
+        app: calculator             # Must match selector.matchLabels
+        job-name: pi-job            # Job name label (useful for identification)
+      annotations:                  # Annotations for pods
+        description: "Pi calculation pod"  # Custom annotation
+    spec:                           # Pod specification
+      restartPolicy: OnFailure     # Pod restart policy: OnFailure or Never (NOT Always for Jobs)
+                                    # OnFailure: restart pod if it fails
+                                    # Never: don't restart pod
+      containers:                   # List of containers to run in the pod
+      - name: pi                    # Container name (must be unique within pod)
+        image: perl:5.34           # Container image (Docker image name and tag)
+        imagePullPolicy: IfNotPresent  # When to pull image: Always, Never, IfNotPresent
+        command:                    # Command to run
+        - perl
+        - -Mbignum=bpi
+        - -wle
+        - print bpi(2000)           # Calculate pi to 2000 decimal places
+        resources:                  # Resource requests and limits
+          requests:                 # Minimum resources required
+            cpu: "100m"            # CPU request (100m = 0.1 CPU cores)
+            memory: "128Mi"        # Memory request (128Mi = 128 mebibytes)
+          limits:                   # Maximum resources allowed
+            cpu: "500m"            # CPU limit
+            memory: "512Mi"        # Memory limit
+        env:                        # Environment variables for the container
+        - name: JOB_NAME           # Job name environment variable
+          valueFrom:                # Get value from pod field
+            fieldRef:              # Reference to pod field
+              fieldPath: metadata.labels['job-name']  # Job name from labels
+        securityContext:           # Security settings for container
+          runAsNonRoot: true       # Container must run as non-root user
+          runAsUser: 1000         # UID to run container as
+          allowPrivilegeEscalation: false  # Prevent privilege escalation
+          capabilities:            # Linux capabilities
+            drop:                  # Capabilities to drop
+            - ALL                  # Drop all capabilities
+      terminationGracePeriodSeconds: 30  # Seconds to wait for graceful shutdown (default: 30)
+      dnsPolicy: ClusterFirst       # DNS policy: ClusterFirst, ClusterFirstWithHostNet, Default, None
+      nodeSelector:                 # Node selection constraints (optional)
+        disktype: ssd              # Node must have label disktype=ssd
+      tolerations:                  # Tolerations for tainted nodes (optional)
+      - key: "key1"                # Taint key
+        operator: Equal            # Operator: Equal or Exists
+        value: "value1"           # Taint value (required if operator is Equal)
+        effect: NoSchedule        # Taint effect: NoSchedule, PreferNoSchedule, NoExecute
+
+---
+# Example: Indexed Job (Kubernetes 1.24+)
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: indexed-job
+spec:
+  completions: 5                   # Number of completions (creates pods 0-4)
+  parallelism: 2                   # Run 2 pods in parallel
+  completionMode: Indexed          # Indexed completion mode
+  backoffLimit: 4                  # Retry limit
+  template:
+    metadata:
+      labels:
+        app: indexed-job
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: worker
+        image: busybox:1.35
+        command:
+        - sh
+        - -c
+        - |
+          echo "Processing item $JOB_COMPLETION_INDEX"
+          # JOB_COMPLETION_INDEX is automatically set (0, 1, 2, 3, 4)
+        env:
+        - name: JOB_COMPLETION_INDEX  # Index of this pod (0-based)
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.annotations['batch.kubernetes.io/job-completion-index']
+      completionMode: Indexed      # Must match spec.completionMode
+
+---
+# Example: Job with volume
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: data-processing-job
+spec:
+  completions: 1
+  parallelism: 1
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app: data-processor
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: processor
+        image: data-processor:latest
+        command:
+        - /bin/sh
+        - -c
+        - process-data.sh
+        volumeMounts:
+        - name: data-volume
+          mountPath: /data
+        - name: output-volume
+          mountPath: /output
+      volumes:
+      - name: data-volume
+        persistentVolumeClaim:
+          claimName: input-data-pvc
+      - name: output-volume
+        persistentVolumeClaim:
+          claimName: output-data-pvc
+

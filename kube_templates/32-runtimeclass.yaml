@@ -1,0 +1,141 @@
+apiVersion: node.k8s.io/v1          # API version for RuntimeClass resource (node.k8s.io/v1 is the stable version)
+kind: RuntimeClass                   # Resource type - RuntimeClass defines container runtime configurations
+metadata:                            # Metadata section - contains identifying information
+  name: gvisor                      # Name of the RuntimeClass (must be unique cluster-wide)
+  labels:                           # Labels are key-value pairs used for selecting and organizing resources
+    runtime: gvisor                 # Label: runtime type
+  annotations:                      # Annotations are metadata that don't affect resource behavior
+    description: "gVisor runtime class"  # Custom annotation: human-readable description
+  # Note: RuntimeClass is cluster-scoped, so no namespace field
+handler: runsc                       # Handler name (required) - identifies the CRI implementation
+                                    # Examples: runc, runsc (gVisor), kata (Kata Containers), etc.
+                                    # Must match a configured runtime handler in the CRI
+overhead:                            # Overhead for runtime (optional)
+  podFixed:                          # Fixed overhead per pod
+    cpu: "100m"                      # CPU overhead (100m = 0.1 CPU cores)
+    memory: "128Mi"                  # Memory overhead (128Mi = 128 mebibytes)
+scheduling:                          # Scheduling constraints (optional, Kubernetes 1.20+)
+  nodeSelector:                      # Node selector
+    runtime: gvisor                  # Nodes must have label runtime=gvisor
+  tolerations:                       # Tolerations
+  - key: runtime                    # Taint key
+    operator: Equal                 # Operator: Equal or Exists
+    value: gvisor                   # Taint value
+    effect: NoSchedule              # Taint effect: NoSchedule, PreferNoSchedule, NoExecute
+
+---
+# Example: RuntimeClass for gVisor (sandboxed containers)
+apiVersion: node.k8s.io/v1
+kind: RuntimeClass
+metadata:
+  name: gvisor
+handler: runsc                       # gVisor handler
+overhead:
+  podFixed:
+    cpu: "100m"
+    memory: "128Mi"
+scheduling:
+  nodeSelector:
+    runtime: gvisor
+  tolerations:
+  - key: runtime
+    operator: Equal
+    value: gvisor
+    effect: NoSchedule
+
+---
+# Example: RuntimeClass for Kata Containers
+apiVersion: node.k8s.io/v1
+kind: RuntimeClass
+metadata:
+  name: kata
+handler: kata                         # Kata Containers handler
+overhead:
+  podFixed:
+    cpu: "200m"                      # Higher overhead for VMs
+    memory: "256Mi"
+scheduling:
+  nodeSelector:
+    runtime: kata
+  tolerations:
+  - key: runtime
+    operator: Equal
+    value: kata
+    effect: NoSchedule
+
+---
+# Example: RuntimeClass for standard runc (default)
+apiVersion: node.k8s.io/v1
+kind: RuntimeClass
+metadata:
+  name: runc
+handler: runc                        # Standard runc handler
+overhead:
+  podFixed:
+    cpu: "0"                         # Minimal overhead
+    memory: "0"
+# Note: No scheduling constraints (runs on all nodes)
+
+---
+# Example: RuntimeClass with minimal overhead
+apiVersion: node.k8s.io/v1
+kind: RuntimeClass
+metadata:
+  name: lightweight
+handler: runc
+overhead:
+  podFixed:
+    cpu: "50m"
+    memory: "64Mi"
+scheduling:
+  nodeSelector:
+    runtime: lightweight
+
+---
+# Example: RuntimeClass for Firecracker
+apiVersion: node.k8s.io/v1
+kind: RuntimeClass
+metadata:
+  name: firecracker
+handler: firecracker                  # Firecracker handler
+overhead:
+  podFixed:
+    cpu: "150m"
+    memory: "192Mi"
+scheduling:
+  nodeSelector:
+    runtime: firecracker
+  tolerations:
+  - key: runtime
+    operator: Equal
+    value: firecracker
+    effect: NoSchedule
+
+---
+# Example: RuntimeClass without overhead
+apiVersion: node.k8s.io/v1
+kind: RuntimeClass
+metadata:
+  name: no-overhead
+handler: runc
+# No overhead specified (defaults to 0)
+scheduling:
+  nodeSelector:
+    runtime: standard
+
+---
+# Example: RuntimeClass with node selector only
+apiVersion: node.k8s.io/v1
+kind: RuntimeClass
+metadata:
+  name: gpu-runtime
+handler: runc
+overhead:
+  podFixed:
+    cpu: "100m"
+    memory: "128Mi"
+scheduling:
+  nodeSelector:
+    accelerator: nvidia-gpu          # Only run on GPU nodes
+  # No tolerations (assumes nodes are not tainted)
+

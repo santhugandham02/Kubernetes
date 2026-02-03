@@ -1,0 +1,160 @@
+apiVersion: policy/v1                # API version for PodDisruptionBudget resource (policy/v1 is the stable version)
+kind: PodDisruptionBudget            # Resource type - PDB limits voluntary disruptions to pods
+metadata:                            # Metadata section - contains identifying information
+  name: nginx-pdb                   # Name of the PodDisruptionBudget (must be unique within namespace)
+  namespace: default                # Namespace where PDB will be created (optional, defaults to 'default')
+  labels:                           # Labels are key-value pairs used for selecting and organizing resources
+    app: nginx                      # Label: application name
+  annotations:                      # Annotations are metadata that don't affect resource behavior
+    description: "PDB for nginx pods"  # Custom annotation: human-readable description
+spec:                                # Specification section - defines desired state
+  minAvailable: 2                  # Minimum number of pods that must be available (optional)
+                                    # Can be number (e.g., 2) or percentage (e.g., "50%")
+                                    # Mutually exclusive with maxUnavailable
+  # maxUnavailable: 1              # Maximum number of pods that can be unavailable (optional)
+                                    # Can be number (e.g., 1) or percentage (e.g., "25%")
+                                    # Mutually exclusive with minAvailable
+  selector:                         # Label selector - selects pods this PDB applies to (required)
+    matchLabels:                    # Match pods with exact label matches
+      app: nginx                    # Pods must have label app=nginx
+    matchExpressions:               # Advanced selector using expressions (optional)
+    - key: version                  # Label key to match
+      operator: In                  # Operator: In, NotIn, Exists, DoesNotExist
+      values:                       # Values for In/NotIn operators
+      - v1
+      - v2
+  unhealthyPodEvictionPolicy: IfHealthyBudget  # Unhealthy pod eviction policy (optional, Kubernetes 1.26+)
+                                    # IfHealthyBudget: only evict unhealthy pods if budget allows (default)
+                                    # AlwaysAllow: always allow eviction of unhealthy pods
+
+---
+# Example: PDB with minAvailable (number)
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: app-pdb-min-available
+  namespace: default
+spec:
+  minAvailable: 3                  # At least 3 pods must be available
+  selector:
+    matchLabels:
+      app: myapp
+
+---
+# Example: PDB with minAvailable (percentage)
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: app-pdb-min-available-percent
+  namespace: default
+spec:
+  minAvailable: "50%"              # At least 50% of pods must be available
+  selector:
+    matchLabels:
+      app: myapp
+
+---
+# Example: PDB with maxUnavailable (number)
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: app-pdb-max-unavailable
+  namespace: default
+spec:
+  maxUnavailable: 1                 # At most 1 pod can be unavailable
+  selector:
+    matchLabels:
+      app: myapp
+
+---
+# Example: PDB with maxUnavailable (percentage)
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: app-pdb-max-unavailable-percent
+  namespace: default
+spec:
+  maxUnavailable: "25%"            # At most 25% of pods can be unavailable
+  selector:
+    matchLabels:
+      app: myapp
+
+---
+# Example: PDB for StatefulSet
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: database-pdb
+  namespace: default
+spec:
+  minAvailable: 2                  # At least 2 database pods must be available
+  selector:
+    matchLabels:
+      app: database
+      component: stateful
+
+---
+# Example: PDB with matchExpressions
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: frontend-pdb
+  namespace: default
+spec:
+  minAvailable: "50%"
+  selector:
+    matchExpressions:
+    - key: app
+      operator: In
+      values:
+      - frontend
+      - web
+    - key: tier
+      operator: In
+      values:
+      - frontend
+
+---
+# Example: PDB with unhealthy pod eviction policy
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: app-pdb-unhealthy-policy
+  namespace: default
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: myapp
+  unhealthyPodEvictionPolicy: AlwaysAllow  # Always allow eviction of unhealthy pods
+                                            # Useful when you want to quickly remove unhealthy pods
+
+---
+# Example: PDB for high availability (strict)
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ha-app-pdb
+  namespace: production
+spec:
+  minAvailable: "66%"              # At least 66% of pods must be available
+                                    # For 3 replicas, at least 2 must be available
+  selector:
+    matchLabels:
+      app: critical-app
+      environment: production
+
+---
+# Example: PDB allowing more disruption (for non-critical workloads)
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: non-critical-pdb
+  namespace: default
+spec:
+  maxUnavailable: "50%"            # Allow up to 50% of pods to be unavailable
+                                    # More permissive for non-critical workloads
+  selector:
+    matchLabels:
+      app: non-critical-app
+

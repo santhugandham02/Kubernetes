@@ -1,0 +1,174 @@
+apiVersion: v1                      # API version for LimitRange resource (v1 is the stable version)
+kind: LimitRange                    # Resource type - LimitRange sets default and max/min limits for resources in namespace
+metadata:                           # Metadata section - contains identifying information
+  name: mem-limit-range            # Name of the LimitRange (must be unique within namespace)
+  namespace: default               # Namespace where LimitRange will be created (optional, defaults to 'default')
+  labels:                          # Labels are key-value pairs used for selecting and organizing resources
+    limit: memory                  # Label: limit type
+  annotations:                     # Annotations are metadata that don't affect resource behavior
+    description: "Memory limit range"  # Custom annotation: human-readable description
+spec:                               # Specification section - defines desired state
+  limits:                          # List of limit ranges (required)
+  - type: Container                # Limit type: Container, Pod, PersistentVolumeClaim
+    default:                       # Default values (applied when not specified)
+      cpu: "500m"                  # Default CPU request (500m = 0.5 CPU cores)
+      memory: "512Mi"               # Default memory request (512Mi = 512 mebibytes)
+    defaultRequest:                 # Default request values (applied when requests not specified)
+      cpu: "100m"                  # Default CPU request (100m = 0.1 CPU cores)
+      memory: "128Mi"               # Default memory request (128Mi = 128 mebibytes)
+    max:                           # Maximum values (cannot exceed)
+      cpu: "2"                     # Maximum CPU limit (2 CPU cores)
+      memory: "2Gi"                # Maximum memory limit (2Gi = 2 gibibytes)
+    min:                           # Minimum values (must be at least)
+      cpu: "50m"                   # Minimum CPU request (50m = 0.05 CPU cores)
+      memory: "64Mi"               # Minimum memory request (64Mi = 64 mebibytes)
+    maxLimitRequestRatio:           # Maximum ratio of limit to request (optional)
+      cpu: "4"                     # CPU limit can be at most 4x the request
+      memory: "2"                  # Memory limit can be at most 2x the request
+  - type: Pod                      # Limit type: Pod (applies to all containers in pod)
+    max:                           # Maximum values for entire pod
+      cpu: "4"                     # Maximum total CPU for pod (4 CPU cores)
+      memory: "4Gi"                # Maximum total memory for pod (4Gi = 4 gibibytes)
+    min:                           # Minimum values for entire pod
+      cpu: "100m"                  # Minimum total CPU for pod
+      memory: "256Mi"              # Minimum total memory for pod
+  - type: PersistentVolumeClaim    # Limit type: PersistentVolumeClaim
+    max:                           # Maximum values for PVC
+      storage: "10Gi"              # Maximum storage size (10Gi = 10 gibibytes)
+    min:                           # Minimum values for PVC
+      storage: "1Gi"               # Minimum storage size (1Gi = 1 gibibyte)
+
+---
+# Example: Container limits only
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: container-limits
+  namespace: default
+spec:
+  limits:
+  - type: Container
+    default:
+      cpu: "1"
+      memory: "1Gi"
+    defaultRequest:
+      cpu: "200m"
+      memory: "256Mi"
+    max:
+      cpu: "4"
+      memory: "4Gi"
+    min:
+      cpu: "100m"
+      memory: "128Mi"
+
+---
+# Example: Pod limits only
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: pod-limits
+  namespace: default
+spec:
+  limits:
+  - type: Pod
+    max:
+      cpu: "8"
+      memory: "8Gi"
+    min:
+      cpu: "200m"
+      memory: "512Mi"
+
+---
+# Example: PVC limits only
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: pvc-limits
+  namespace: default
+spec:
+  limits:
+  - type: PersistentVolumeClaim
+    max:
+      storage: "100Gi"
+    min:
+      storage: "1Gi"
+
+---
+# Example: Comprehensive limits for production namespace
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: production-limits
+  namespace: production
+spec:
+  limits:
+  - type: Container
+    default:
+      cpu: "500m"
+      memory: "512Mi"
+    defaultRequest:
+      cpu: "100m"
+      memory: "128Mi"
+    max:
+      cpu: "2"
+      memory: "2Gi"
+    min:
+      cpu: "50m"
+      memory: "64Mi"
+    maxLimitRequestRatio:
+      cpu: "4"
+      memory: "2"
+  - type: Pod
+    max:
+      cpu: "4"
+      memory: "4Gi"
+    min:
+      cpu: "100m"
+      memory: "256Mi"
+  - type: PersistentVolumeClaim
+    max:
+      storage: "50Gi"
+    min:
+      storage: "1Gi"
+
+---
+# Example: Limits with maxLimitRequestRatio (prevents over-provisioning)
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: ratio-limits
+  namespace: default
+spec:
+  limits:
+  - type: Container
+    default:
+      cpu: "500m"
+      memory: "512Mi"
+    defaultRequest:
+      cpu: "200m"
+      memory: "256Mi"
+    max:
+      cpu: "2"
+      memory: "2Gi"
+    min:
+      cpu: "100m"
+      memory: "128Mi"
+    maxLimitRequestRatio:
+      cpu: "2"                      # CPU limit can be at most 2x the request
+      memory: "1.5"                 # Memory limit can be at most 1.5x the request
+                                    # This prevents setting limits much higher than requests
+
+---
+# Example: Minimal limits (only max)
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: max-only-limits
+  namespace: default
+spec:
+  limits:
+  - type: Container
+    max:
+      cpu: "4"
+      memory: "4Gi"
+

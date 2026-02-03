@@ -1,0 +1,114 @@
+apiVersion: v1                      # API version for Service resource (v1 is the stable version)
+kind: Service                       # Resource type - Service exposes pods as network services
+metadata:                           # Metadata section - contains identifying information
+  name: nginx-service              # Name of the Service (must be unique within namespace)
+  namespace: default               # Namespace where Service will be created (optional, defaults to 'default')
+  labels:                          # Labels are key-value pairs used for selecting and organizing resources
+    app: nginx                     # Label: application name
+    service: web                   # Label: service type
+  annotations:                     # Annotations are metadata that don't affect resource behavior
+    # Cloud provider annotations (beta-level, but still commonly used):
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"  # AWS-specific: use Network Load Balancer
+    # Note: Some cloud providers are moving to newer annotation formats
+    # Check your cloud provider's documentation for latest annotations
+    description: "Nginx web service"  # Custom annotation: human-readable description
+spec:                               # Specification section - defines desired state
+  type: ClusterIP                  # Service type: ClusterIP (default), NodePort, LoadBalancer, ExternalName
+  clusterIP: 10.96.0.1             # Specific ClusterIP address (optional, auto-assigned if omitted)
+  clusterIPs:                      # Multiple ClusterIPs for dual-stack (IPv4 and IPv6) - Kubernetes 1.20+
+  - 10.96.0.1                      # IPv4 ClusterIP
+  - 2001:db8::1                    # IPv6 ClusterIP (example)
+  ipFamilyPolicy: RequireDualStack # IP family policy: SingleStack, RequireDualStack, PreferDualStack
+  ipFamilies:                      # IP families: IPv4, IPv6, or both
+  - IPv4
+  - IPv6
+  selector:                        # Label selector - selects pods to route traffic to
+    app: nginx                     # Pods must have label app=nginx
+    version: v1                    # Pods must have label version=v1
+  ports:                           # List of ports exposed by the service
+  - name: http                     # Port name (useful for service discovery, must be unique within service)
+    protocol: TCP                  # Protocol: TCP (default), UDP, or SCTP
+    port: 80                       # Port exposed by the service (external port)
+    targetPort: 8080               # Port on pods to forward traffic to (can be number or name)
+    appProtocol: http              # Application protocol: http, https, grpc, etc. (optional, Kubernetes 1.19+)
+  - name: https                    # Second port example
+    protocol: TCP
+    port: 443                      # Service port
+    targetPort: 8443               # Pod port
+    appProtocol: https             # Application protocol
+  sessionAffinity: ClientIP        # Session affinity: None (default) or ClientIP (sticky sessions)
+  sessionAffinityConfig:          # Configuration for session affinity (optional)
+    clientIP:                      # ClientIP session affinity configuration
+      timeoutSeconds: 10800        # Seconds a session can last (default: 10800 = 3 hours)
+  loadBalancerIP: 192.168.1.100   # Static IP for LoadBalancer type (optional, cloud-provider specific)
+                                    # Note: Deprecated in Kubernetes 1.24+ in favor of loadBalancerClass
+                                    # Still widely used, but check your cloud provider's documentation
+  loadBalancerSourceRanges:       # Allowed source IPs for LoadBalancer (optional, creates firewall rules)
+  - 10.0.0.0/8                     # CIDR range 1
+  - 172.16.0.0/12                  # CIDR range 2
+  externalIPs:                     # External IPs to route to service (optional)
+  - 192.168.1.10                   # External IP 1
+  - 192.168.1.11                   # External IP 2
+  externalName: external-service.example.com  # External name for ExternalName type (optional)
+  externalTrafficPolicy: Local     # External traffic policy: Cluster (default) or Local (for NodePort/LoadBalancer)
+  healthCheckNodePort: 30000       # Node port for health check (optional, for LoadBalancer with Local policy)
+  publishNotReadyAddresses: false  # Publish endpoints even if pods are not ready (default: false)
+  allocateLoadBalancerNodePorts: true  # Allocate node ports for LoadBalancer (default: true, Kubernetes 1.20+)
+  internalTrafficPolicy: Cluster   # Internal traffic policy: Cluster or Local (default: Cluster, Kubernetes 1.22+)
+
+---
+# Example: NodePort Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-nodeport-service
+spec:
+  type: NodePort                  # Service type: exposes service on each node's IP at a static port
+  selector:
+    app: nginx
+  ports:
+  - name: http
+    protocol: TCP
+    port: 80                      # Service port (cluster-internal)
+    targetPort: 8080              # Pod port
+    nodePort: 30080               # Node port (30000-32767 range, optional - auto-assigned if omitted)
+
+---
+# Example: LoadBalancer Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-loadbalancer-service
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"           # AWS: Network Load Balancer
+    service.beta.kubernetes.io/aws-load-balancer-backend-protocol: "tcp" # AWS: backend protocol
+    service.beta.kubernetes.io/aws-load-balancer-connection-idle-timeout: "60"  # AWS: idle timeout
+    service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"  # AWS: cross-zone
+    service.beta.kubernetes.io/azure-load-balancer-internal: "true"      # Azure: internal LB
+    service.beta.kubernetes.io/gce-load-balancer-type: "Internal"      # GCP: internal LB
+spec:
+  type: LoadBalancer              # Service type: provisions external load balancer (cloud-provider specific)
+  selector:
+    app: nginx
+  ports:
+  - name: http
+    protocol: TCP
+    port: 80
+    targetPort: 8080
+  loadBalancerIP: 192.168.1.100   # Static IP (cloud-provider specific)
+                                    # Note: Deprecated in Kubernetes 1.24+ in favor of loadBalancerClass
+  loadBalancerSourceRanges:       # Firewall rules
+  - 10.0.0.0/8
+  externalTrafficPolicy: Local     # Preserve source IP, but requires health checks on each node
+
+---
+# Example: ExternalName Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: external-database-service
+spec:
+  type: ExternalName              # Service type: maps service to external DNS name
+  externalName: database.example.com  # External DNS name to proxy to
+  # Note: ExternalName services don't use selector or ports
+

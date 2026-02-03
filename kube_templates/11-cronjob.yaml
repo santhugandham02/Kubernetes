@@ -1,0 +1,147 @@
+apiVersion: batch/v1                 # API version for CronJob resource (batch/v1 is the stable version)
+kind: CronJob                        # Resource type - CronJob runs Jobs on a schedule (cron syntax)
+metadata:                            # Metadata section - contains identifying information
+  name: backup-cronjob              # Name of the CronJob (must be unique within namespace)
+  namespace: default                # Namespace where CronJob will be created (optional, defaults to 'default')
+  labels:                           # Labels are key-value pairs used for selecting and organizing resources
+    app: backup                     # Label: application name
+    job-type: scheduled             # Label: job type
+  annotations:                      # Annotations are metadata that don't affect resource behavior
+    description: "Daily backup job"  # Custom annotation: human-readable description
+spec:                                # Specification section - defines desired state
+  schedule: "0 2 * * *"             # Cron schedule (required)
+                                    # Format: "minute hour day month weekday"
+                                    # Examples:
+                                    #   "0 2 * * *"     - Daily at 2:00 AM
+                                    #   "0 */6 * * *"   - Every 6 hours
+                                    #   "0 0 * * 0"     - Weekly on Sunday at midnight
+                                    #   "*/15 * * * *"  - Every 15 minutes
+                                    #   "0 0 1 * *"     - Monthly on 1st at midnight
+                                    #   "0 9-17 * * 1-5" - Every hour from 9 AM to 5 PM on weekdays
+  timeZone: "America/New_York"      # Timezone for schedule (optional, Kubernetes 1.24+)
+                                    # Uses IANA timezone database (e.g., "UTC", "America/New_York", "Asia/Tokyo")
+                                    # Defaults to UTC if omitted
+  startingDeadlineSeconds: 200      # Deadline in seconds for starting job if missed (optional)
+                                    # If job cannot be started within this time, it's counted as missed
+                                    # Defaults to no deadline if omitted
+  concurrencyPolicy: Forbid          # Concurrency policy: Allow, Forbid, Replace (default: Allow)
+                                    # Allow: allow concurrent executions
+                                    # Forbid: skip new execution if previous is still running
+                                    # Replace: cancel previous execution and start new one
+  suspend: false                    # Suspend cron job execution (default: false)
+                                    # When true, cron job will not create new jobs until resumed
+  successfulJobsHistoryLimit: 3     # Number of successful jobs to keep (default: 3)
+                                    # Old successful jobs are deleted, keeping only this many
+  failedJobsHistoryLimit: 1         # Number of failed jobs to keep (default: 1)
+                                    # Old failed jobs are deleted, keeping only this many
+  jobTemplate:                       # Job template - defines how Jobs should be created
+    metadata:                       # Metadata for Jobs created from this template
+      labels:                       # Labels applied to Jobs
+        app: backup                 # Application label
+        cronjob: backup-cronjob     # CronJob name label
+      annotations:                  # Annotations for Jobs
+        description: "Backup job created by CronJob"  # Custom annotation
+    spec:                           # Job specification (same as Job spec)
+      completions: 1                # Number of successful completions required (default: 1)
+      parallelism: 1                # Number of pods to run in parallel (default: 1)
+      backoffLimit: 6               # Number of retries before marking job as failed (default: 6)
+      activeDeadlineSeconds: 3600   # Maximum seconds job can be active (optional)
+      ttlSecondsAfterFinished: 100  # Seconds to keep completed/failed job before auto-deletion (optional)
+      template:                     # Pod template - defines how pods should be created
+        metadata:                   # Metadata for pods created from this template
+          labels:                   # Labels applied to pods
+            app: backup             # Application label
+            job-name: backup-job    # Job name label
+          annotations:              # Annotations for pods
+            description: "Backup pod"  # Custom annotation
+        spec:                       # Pod specification
+          restartPolicy: OnFailure  # Pod restart policy: OnFailure or Never (NOT Always for Jobs)
+          containers:               # List of containers to run in the pod
+          - name: backup            # Container name (must be unique within pod)
+            image: backup-tool:latest  # Container image (Docker image name and tag)
+            imagePullPolicy: IfNotPresent  # When to pull image: Always, Never, IfNotPresent
+            command:                # Command to run
+            - /bin/sh
+            - -c
+            - |
+              echo "Starting backup at $(date)"
+              backup.sh --destination /backup
+              echo "Backup completed at $(date)"
+            env:                    # Environment variables for the container
+            - name: BACKUP_SOURCE   # Backup source environment variable
+              value: "/data"        # Literal value
+            - name: BACKUP_DEST     # Backup destination environment variable
+              value: "/backup"      # Literal value
+            - name: CRON_SCHEDULE   # Cron schedule environment variable
+              valueFrom:            # Get value from CronJob
+                fieldRef:           # Reference to field (note: this is conceptual, actual implementation may vary)
+                  fieldPath: metadata.annotations['batch.kubernetes.io/cronjob-schedule']
+            volumeMounts:           # Mount volumes into container filesystem
+            - name: data-volume     # Volume name (must match volumes.name)
+              mountPath: /data      # Path inside container where volume is mounted
+              readOnly: true        # Mount as read-only
+            - name: backup-volume   # Backup volume
+              mountPath: /backup    # Path inside container
+              readOnly: false       # Read-write mount
+            resources:              # Resource requests and limits
+              requests:             # Minimum resources required
+                cpu: "200m"        # CPU request (200m = 0.2 CPU cores)
+                memory: "256Mi"    # Memory request (256Mi = 256 mebibytes)
+              limits:               # Maximum resources allowed
+                cpu: "1000m"       # CPU limit (1000m = 1 CPU core)
+                memory: "1Gi"       # Memory limit (1Gi = 1 gibibyte)
+            securityContext:        # Security settings for container
+              runAsNonRoot: true   # Container must run as non-root user
+              runAsUser: 1000     # UID to run container as
+              allowPrivilegeEscalation: false  # Prevent privilege escalation
+              capabilities:        # Linux capabilities
+                drop:              # Capabilities to drop
+                - ALL              # Drop all capabilities
+          volumes:                  # Volumes available to containers in pod
+          - name: data-volume       # Volume name (referenced in volumeMounts.name)
+            persistentVolumeClaim:  # Volume from PVC
+              claimName: data-pvc   # PVC name
+              readOnly: true        # Mount as read-only
+          - name: backup-volume     # Backup volume
+            persistentVolumeClaim:  # Volume from PVC
+              claimName: backup-pvc  # PVC name
+              readOnly: false       # Read-write mount
+          terminationGracePeriodSeconds: 30  # Seconds to wait for graceful shutdown (default: 30)
+          dnsPolicy: ClusterFirst    # DNS policy: ClusterFirst, ClusterFirstWithHostNet, Default, None
+          nodeSelector:              # Node selection constraints (optional)
+            disktype: ssd          # Node must have label disktype=ssd
+          tolerations:              # Tolerations for tainted nodes (optional)
+          - key: "key1"            # Taint key
+            operator: Equal        # Operator: Equal or Exists
+            value: "value1"       # Taint value (required if operator is Equal)
+            effect: NoSchedule    # Taint effect: NoSchedule, PreferNoSchedule, NoExecute
+
+---
+# Example: CronJob with multiple schedules (using multiple CronJobs)
+# Note: You cannot have multiple schedules in one CronJob, create separate CronJobs instead
+
+---
+# Example: CronJob that runs every minute (for testing)
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: test-cronjob
+spec:
+  schedule: "*/1 * * * *"          # Every minute
+  concurrencyPolicy: Forbid         # Don't allow concurrent executions
+  successfulJobsHistoryLimit: 1     # Keep only 1 successful job
+  failedJobsHistoryLimit: 1         # Keep only 1 failed job
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: test
+            image: busybox:1.35
+            command:
+            - /bin/sh
+            - -c
+            - echo "Test job ran at $(date)"
+          terminationGracePeriodSeconds: 10
+

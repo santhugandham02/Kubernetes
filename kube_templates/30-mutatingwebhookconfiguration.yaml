@@ -1,0 +1,255 @@
+apiVersion: admissionregistration.k8s.io/v1  # API version for MutatingWebhookConfiguration resource
+kind: MutatingWebhookConfiguration            # Resource type - MutatingWebhookConfiguration defines mutating admission webhooks
+metadata:                                    # Metadata section - contains identifying information
+  name: example-mutating-webhook            # Name of the MutatingWebhookConfiguration (must be unique cluster-wide)
+  labels:                                   # Labels are key-value pairs used for selecting and organizing resources
+    webhook: mutating                       # Label: webhook type
+  annotations:                              # Annotations are metadata that don't affect resource behavior
+    description: "Example mutating webhook"  # Custom annotation: human-readable description
+  # Note: MutatingWebhookConfiguration is cluster-scoped, so no namespace field
+webhooks:                                   # List of webhooks (required)
+- name: example-mutating-webhook.example.com  # Webhook name (required) - must be unique
+  admissionReviewVersions:                   # Supported admission review versions (required)
+  - v1                                      # Version 1
+  - v1beta1                                 # Version 1beta1 (for older clusters)
+  clientConfig:                              # Client configuration (required)
+    url: https://webhook.example.com/mutate  # Webhook URL (for external webhook)
+    # Alternative: service reference (for in-cluster webhook)
+    # service:
+    #   namespace: default
+    #   name: webhook-service
+    #   path: /mutate
+    #   port: 443
+    caBundle: LS0tLS1CRUdJTi...              # CA bundle for TLS verification (base64 encoded)
+                                            # Required for TLS connections
+  rules:                                     # Rules for when to call webhook (required)
+  - apiGroups:                               # API groups
+    - ""                                     # Empty string = core API group
+    - apps                                   # Apps API group
+    apiVersions:                             # API versions
+    - v1
+    - v1beta1
+    resources:                               # Resources
+    - pods
+    - deployments
+    operations:                               # Operations to intercept
+    - CREATE                                 # Create operation
+    - UPDATE                                 # Update operation
+    # Note: Mutating webhooks typically don't intercept DELETE operations
+    # CONNECT operation is not supported for mutating webhooks
+  namespaceSelector:                         # Namespace selector (optional)
+    matchLabels:                             # Match namespaces with labels
+      environment: production                # Namespace must have label environment=production
+  objectSelector:                            # Object selector (optional, Kubernetes 1.15+)
+    matchLabels:                             # Match objects with labels
+      app: nginx                             # Object must have label app=nginx
+  sideEffects: None                         # Side effects: None, NoneOnDryRun, or Some
+                                            # None: webhook has no side effects
+                                            # NoneOnDryRun: webhook has no side effects on dry-run
+                                            # Some: webhook may have side effects
+  reinvocationPolicy: IfNeeded              # Reinvocation policy: Never or IfNeeded (default: Never)
+                                            # Never: don't reinvoke after other webhooks mutate
+                                            # IfNeeded: reinvoke if other webhooks mutate (Kubernetes 1.15+)
+  timeoutSeconds: 10                         # Timeout in seconds (default: 10)
+  failurePolicy: Fail                        # Failure policy: Ignore or Fail (default: Fail)
+                                            # Ignore: allow request if webhook fails
+                                            # Fail: reject request if webhook fails
+  matchPolicy: Equivalent                    # Match policy: Exact or Equivalent (default: Equivalent)
+                                            # Exact: match exact API version
+                                            # Equivalent: match equivalent API versions
+
+---
+# Example: Mutating webhook with service reference
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: in-cluster-mutating-webhook
+webhooks:
+- name: in-cluster-mutating-webhook.example.com
+  admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:                                # Service reference (in-cluster webhook)
+      namespace: default                    # Service namespace
+      name: webhook-service                # Service name
+      path: /mutate                         # Webhook path
+      port: 443                            # Service port
+    caBundle: LS0tLS1CRUdJTi...            # CA bundle
+  rules:
+  - apiGroups:
+    - ""
+    apiVersions:
+    - v1
+    resources:
+    - pods
+    operations:
+    - CREATE
+    - UPDATE
+  sideEffects: None
+  reinvocationPolicy: IfNeeded
+  failurePolicy: Fail
+
+---
+# Example: Mutating webhook for adding default labels
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: label-mutating-webhook
+webhooks:
+- name: label-mutating-webhook.example.com
+  admissionReviewVersions:
+  - v1
+  clientConfig:
+    url: https://webhook.example.com/add-labels
+    caBundle: LS0tLS1CRUdJTi...
+  rules:
+  - apiGroups:
+    - ""
+    apiVersions:
+    - v1
+    resources:
+    - pods
+    operations:
+    - CREATE
+  objectSelector:                           # Only mutate pods without specific labels
+    matchExpressions:
+    - key: managed-by
+      operator: DoesNotExist
+  sideEffects: None
+  reinvocationPolicy: Never
+  failurePolicy: Fail
+  timeoutSeconds: 5
+
+---
+# Example: Mutating webhook with namespace selector
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: production-mutating-webhook
+webhooks:
+- name: production-mutating-webhook.example.com
+  admissionReviewVersions:
+  - v1
+  clientConfig:
+    url: https://webhook.example.com/mutate
+    caBundle: LS0tLS1CRUdJTi...
+  rules:
+  - apiGroups:
+    - ""
+    - apps
+    apiVersions:
+    - v1
+    resources:
+    - pods
+    - deployments
+    operations:
+    - CREATE
+    - UPDATE
+  namespaceSelector:                         # Only mutate resources in production namespace
+    matchLabels:
+      environment: production
+  sideEffects: None
+  reinvocationPolicy: IfNeeded
+  failurePolicy: Fail
+
+---
+# Example: Mutating webhook with Ignore failure policy
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: advisory-mutating-webhook
+webhooks:
+- name: advisory-mutating-webhook.example.com
+  admissionReviewVersions:
+  - v1
+  clientConfig:
+    url: https://webhook.example.com/advisory-mutate
+    caBundle: LS0tLS1CRUdJTi...
+  rules:
+  - apiGroups:
+    - ""
+    apiVersions:
+    - v1
+    resources:
+    - pods
+    operations:
+    - CREATE
+    - UPDATE
+  sideEffects: None
+  reinvocationPolicy: Never
+  failurePolicy: Ignore                     # Ignore failures (advisory only)
+  timeoutSeconds: 5
+
+---
+# Example: Mutating webhook with reinvocation policy
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: reinvoke-mutating-webhook
+webhooks:
+- name: reinvoke-mutating-webhook.example.com
+  admissionReviewVersions:
+  - v1
+  clientConfig:
+    url: https://webhook.example.com/mutate
+    caBundle: LS0tLS1CRUdJTi...
+  rules:
+  - apiGroups:
+    - ""
+    apiVersions:
+    - v1
+    resources:
+    - pods
+    operations:
+    - CREATE
+    - UPDATE
+  sideEffects: None
+  reinvocationPolicy: IfNeeded              # Reinvoke if other webhooks mutate
+                                            # Useful when webhook needs to react to other webhook changes
+  failurePolicy: Fail
+  timeoutSeconds: 10
+
+---
+# Example: Multiple mutating webhooks in one configuration
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: multi-mutating-webhook-config
+webhooks:
+- name: label-injector.example.com
+  admissionReviewVersions:
+  - v1
+  clientConfig:
+    url: https://webhook.example.com/inject-labels
+    caBundle: LS0tLS1CRUdJTi...
+  rules:
+  - apiGroups:
+    - ""
+    apiVersions:
+    - v1
+    resources:
+    - pods
+    operations:
+    - CREATE
+  sideEffects: None
+  reinvocationPolicy: Never
+  failurePolicy: Fail
+- name: env-injector.example.com
+  admissionReviewVersions:
+  - v1
+  clientConfig:
+    url: https://webhook.example.com/inject-env
+    caBundle: LS0tLS1CRUdJTi...
+  rules:
+  - apiGroups:
+    - ""
+    apiVersions:
+    - v1
+    resources:
+    - pods
+    operations:
+    - CREATE
+  sideEffects: None
+  reinvocationPolicy: IfNeeded              # May need to reinvoke if label-injector runs first
+  failurePolicy: Fail
+

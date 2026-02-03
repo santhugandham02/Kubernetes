@@ -1,0 +1,113 @@
+apiVersion: scheduling.k8s.io/v1     # API version for PriorityClass resource (scheduling.k8s.io/v1 is the stable version)
+kind: PriorityClass                  # Resource type - PriorityClass sets priority for pods (affects scheduling and preemption)
+metadata:                            # Metadata section - contains identifying information
+  name: high-priority                # Name of the PriorityClass (must be unique cluster-wide)
+  labels:                            # Labels are key-value pairs used for selecting and organizing resources
+    priority: high                   # Label: priority level
+  annotations:                       # Annotations are metadata that don't affect resource behavior
+    description: "High priority class"  # Custom annotation: human-readable description
+  # Note: PriorityClass is cluster-scoped, so no namespace field
+value: 1000                          # Priority value (required) - higher number = higher priority
+                                    # Range: -2147483648 to 1000000000 (1 billion)
+                                    # System reserved priorities: 2000000000-2147483647
+                                    # Default priority: 0
+globalDefault: false                 # Global default priority class (default: false)
+                                    # When true, pods without priorityClassName use this priority
+                                    # Only one PriorityClass can have globalDefault=true
+preemptionPolicy: PreemptLowerPriority  # Preemption policy: PreemptLowerPriority or Never (default: PreemptLowerPriority)
+                                    # PreemptLowerPriority: can preempt lower priority pods
+                                    # Never: cannot preempt other pods (even lower priority)
+
+---
+# Example: Low priority class
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: low-priority
+value: 100                           # Lower priority value
+globalDefault: false
+preemptionPolicy: PreemptLowerPriority
+
+---
+# Example: Medium priority class
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: medium-priority
+value: 500                           # Medium priority value
+globalDefault: false
+preemptionPolicy: PreemptLowerPriority
+
+---
+# Example: Critical priority class
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: critical-priority
+value: 2000                          # High priority value
+globalDefault: false
+preemptionPolicy: PreemptLowerPriority
+
+---
+# Example: Global default priority class
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: default-priority
+value: 0                             # Default priority value
+globalDefault: true                  # Set as global default
+                                    # Pods without priorityClassName will use this priority
+preemptionPolicy: PreemptLowerPriority
+
+---
+# Example: Non-preempting priority class
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: non-preempting-priority
+value: 1500                          # High priority value
+globalDefault: false
+preemptionPolicy: Never              # Cannot preempt other pods
+                                    # Useful for pods that should not disrupt other workloads
+
+---
+# Example: System priority class (for system components)
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: system-node-critical
+value: 2000001000                    # System priority (within system reserved range)
+globalDefault: false
+preemptionPolicy: PreemptLowerPriority
+description: "Used for system node critical pods that must not be evicted."
+
+---
+# Example: Priority class for batch jobs
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: batch-job-priority
+value: 50                            # Low priority (batch jobs can be preempted)
+globalDefault: false
+preemptionPolicy: PreemptLowerPriority
+
+---
+# Example: Priority class for production workloads
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: production-priority
+value: 1000                          # High priority
+globalDefault: false
+preemptionPolicy: PreemptLowerPriority
+
+---
+# Example: Priority class for development workloads
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: development-priority
+value: 100                           # Low priority (can be preempted by production)
+globalDefault: false
+preemptionPolicy: PreemptLowerPriority
+

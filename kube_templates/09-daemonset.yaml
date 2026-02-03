@@ -1,0 +1,133 @@
+apiVersion: apps/v1                  # API version for DaemonSet resource (apps/v1 is the stable version)
+kind: DaemonSet                      # Resource type - DaemonSet ensures pods run on all (or specific) nodes
+metadata:                            # Metadata section - contains identifying information
+  name: fluentd-daemonset           # Name of the DaemonSet (must be unique within namespace)
+  namespace: kube-system            # Namespace where DaemonSet will be created (often kube-system for system components)
+  labels:                           # Labels are key-value pairs used for selecting and organizing resources
+    app: fluentd                    # Label: application name
+    component: logging              # Label: component type
+  annotations:                      # Annotations are metadata that don't affect resource behavior
+    description: "Fluentd logging DaemonSet"  # Custom annotation: human-readable description
+spec:                                # Specification section - defines desired state
+  selector:                         # Label selector - pods matching these labels are managed by this DaemonSet
+    matchLabels:                    # Match pods with exact label matches
+      app: fluentd                  # Pods must have label app=fluentd
+  updateStrategy:                   # Update strategy for DaemonSet
+    type: RollingUpdate             # Update type: RollingUpdate (default) or OnDelete
+    rollingUpdate:                  # Configuration for rolling update strategy
+      maxUnavailable: 1            # Maximum number of pods that can be unavailable during update
+                                    # Can be number (e.g., 1) or percentage (e.g., "10%")
+                                    # Default: 1 (or 1 if type is OnDelete)
+  minReadySeconds: 0                # Minimum seconds a pod must be ready before considered available (default: 0)
+  revisionHistoryLimit: 10          # Number of ControllerRevisions to retain (default: 10)
+  template:                         # Pod template - defines how pods should be created
+    metadata:                       # Metadata for pods created from this template
+      labels:                       # Labels applied to pods (must match selector)
+        app: fluentd                # Must match selector.matchLabels
+        component: logging          # Component label
+      annotations:                  # Annotations for pods
+        prometheus.io/scrape: "true"  # Example: Prometheus scraping annotation
+        prometheus.io/port: "24231"   # Example: Prometheus port annotation
+    spec:                           # Pod specification
+      containers:                   # List of containers to run in the pod
+      - name: fluentd              # Container name (must be unique within pod)
+        image: fluent/fluentd:v1.14  # Container image (Docker image name and tag)
+        imagePullPolicy: IfNotPresent  # When to pull image: Always, Never, IfNotPresent
+        ports:                      # Container ports to expose
+        - name: metrics             # Port name
+          containerPort: 24231     # Port number inside container
+          protocol: TCP            # Protocol: TCP, UDP, or SCTP
+        env:                        # Environment variables for the container
+        - name: FLUENTD_CONF       # Fluentd configuration environment variable
+          value: "fluent.conf"     # Literal value
+        - name: NODE_NAME          # Node name environment variable
+          valueFrom:                # Get value from pod field
+            fieldRef:              # Reference to pod field
+              fieldPath: spec.nodeName  # Node name field path
+        - name: POD_NAME           # Pod name environment variable
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name  # Pod name field path
+        volumeMounts:               # Mount volumes into container filesystem
+        - name: varlog             # Volume name (must match volumes.name)
+          mountPath: /var/log      # Path inside container where volume is mounted
+          readOnly: true           # Mount as read-only
+        - name: varlibdockercontainers  # Docker containers log directory
+          mountPath: /var/lib/docker/containers
+          readOnly: true           # Mount as read-only
+        - name: fluentd-config     # Fluentd configuration volume
+          mountPath: /fluentd/etc
+          readOnly: true           # Mount as read-only
+        resources:                  # Resource requests and limits
+          requests:                 # Minimum resources required
+            cpu: "100m"            # CPU request (100m = 0.1 CPU cores)
+            memory: "200Mi"        # Memory request (200Mi = 200 mebibytes)
+          limits:                   # Maximum resources allowed
+            cpu: "500m"            # CPU limit
+            memory: "512Mi"        # Memory limit
+        livenessProbe:             # Probe to check if container is alive
+          httpGet:                  # HTTP GET probe
+            path: /metrics         # HTTP path to check
+            port: 24231            # Port to check
+          initialDelaySeconds: 30  # Seconds to wait before first probe
+          periodSeconds: 10        # Seconds between probes
+          timeoutSeconds: 5        # Seconds before probe times out
+          successThreshold: 1      # Consecutive successes needed
+          failureThreshold: 3      # Consecutive failures needed
+        readinessProbe:            # Probe to check if container is ready
+          httpGet:                  # HTTP GET probe
+            path: /health          # HTTP path to check
+            port: 24231            # Port to check
+          initialDelaySeconds: 5   # Seconds to wait before first probe
+          periodSeconds: 5         # Seconds between probes
+          timeoutSeconds: 3        # Seconds before probe times out
+        securityContext:           # Security settings for container
+          runAsNonRoot: true       # Container must run as non-root user
+          runAsUser: 0            # UID to run container as (0 = root, may be needed for log access)
+          allowPrivilegeEscalation: false  # Prevent privilege escalation
+          capabilities:            # Linux capabilities
+            add:                   # Capabilities to add
+            - CHOWN                # Allow changing file ownership
+            - DAC_OVERRIDE        # Allow bypassing file read/write/execute permission checks
+            drop:                  # Capabilities to drop
+            - ALL                  # Drop all capabilities, then add only what's needed
+      volumes:                     # Volumes available to containers in pod
+      - name: varlog               # Volume name (referenced in volumeMounts.name)
+        hostPath:                  # Host path volume (accesses host filesystem)
+          path: /var/log           # Path on host
+          type: Directory          # Type: DirectoryOrCreate, Directory, FileOrCreate, File, Socket, CharDevice, BlockDevice
+      - name: varlibdockercontainers  # Docker containers log directory
+        hostPath:                  # Host path volume
+          path: /var/lib/docker/containers  # Path on host
+          type: Directory          # Type: Directory
+      - name: fluentd-config       # Fluentd configuration volume
+        configMap:                 # Volume from ConfigMap
+          name: fluentd-config    # ConfigMap name
+          items:                   # Specific keys to include (optional)
+          - key: fluent.conf       # Key in ConfigMap
+            path: fluent.conf     # Path in volume
+            mode: 0644            # File permissions (octal)
+      restartPolicy: Always         # Pod restart policy: Always, OnFailure, Never (default: Always)
+      terminationGracePeriodSeconds: 30  # Seconds to wait for graceful shutdown (default: 30)
+      dnsPolicy: ClusterFirstWithHostNet  # DNS policy: ClusterFirstWithHostNet (uses host network DNS)
+      hostNetwork: true             # Use host network namespace (default: false, often true for DaemonSets)
+      hostPID: false                # Use host PID namespace (default: false)
+      hostIPC: false                # Use host IPC namespace (default: false)
+      securityContext:              # Security settings for pod (applies to all containers)
+        runAsNonRoot: false        # Allow running as root (may be needed for system components)
+        fsGroup: 0                 # GID for volumes (0 = root)
+      nodeSelector:                 # Node selection constraints (optional)
+        # Example: Only run on nodes with specific label
+        # kubernetes.io/os: linux  # Only run on Linux nodes
+      tolerations:                  # Tolerations for tainted nodes (optional, often needed for system DaemonSets)
+      # Tolerate all taints (common for system DaemonSets)
+      - operator: Exists           # Operator: Equal or Exists
+        effect: NoSchedule         # Taint effect: NoSchedule, PreferNoSchedule, NoExecute
+      - operator: Exists           # Another toleration
+        effect: NoExecute          # Taint effect: NoExecute
+      # Example: Specific toleration
+      # - key: "node-role.kubernetes.io/master"  # Taint key
+      #   operator: Exists         # Operator: Exists (matches any value)
+      #   effect: NoSchedule       # Taint effect: NoSchedule
+      priorityClassName: system-node-critical  # Priority class (often used for system DaemonSets)
+

@@ -1,0 +1,226 @@
+apiVersion: networking.k8s.io/v1       # API version for NetworkPolicy resource (networking.k8s.io/v1 is the stable version)
+kind: NetworkPolicy                    # Resource type - NetworkPolicy defines network access rules for pods
+metadata:                               # Metadata section - contains identifying information
+  name: default-deny-all               # Name of the NetworkPolicy (must be unique within namespace)
+  namespace: default                   # Namespace where NetworkPolicy will be created (optional, defaults to 'default')
+  labels:                              # Labels are key-value pairs used for selecting and organizing resources
+    app: network-policy                # Label: application name
+  annotations:                         # Annotations are metadata that don't affect resource behavior
+    description: "Default deny all network policy"  # Custom annotation: human-readable description
+spec:                                   # Specification section - defines desired state
+  podSelector:                         # Pod selector - selects pods this policy applies to (required)
+    matchLabels:                       # Match pods with exact label matches
+      app: nginx                       # Pods must have label app=nginx
+    matchExpressions:                  # Advanced selector using expressions (optional)
+    - key: tier                        # Label key to match
+      operator: In                    # Operator: In, NotIn, Exists, DoesNotExist
+      values:                          # Values for In/NotIn operators
+      - frontend
+      - backend
+  policyTypes:                         # Policy types: Ingress, Egress, or both (default: both if rules specified)
+  - Ingress                            # Ingress policy type (controls incoming traffic)
+  - Egress                             # Egress policy type (controls outgoing traffic)
+  ingress:                             # List of ingress rules (optional)
+                                    # If omitted and Ingress in policyTypes, all ingress traffic is denied
+  - from:                             # Source of traffic (optional, matches all if omitted)
+    - podSelector:                     # Pod selector for source pods
+        matchLabels:                   # Match pods with labels
+          app: frontend                # Source pods must have label app=frontend
+      namespaceSelector:               # Namespace selector for source namespace (optional)
+        matchLabels:                   # Match namespaces with labels
+          name: frontend-ns           # Source namespace must have label name=frontend-ns
+    - namespaceSelector:               # Another source: namespace selector
+        matchLabels:                   # Match namespaces with labels
+          name: allowed-ns            # Source namespace must have label name=allowed-ns
+    - ipBlock:                         # IP block (CIDR) for source IPs
+        cidr: 10.0.0.0/8              # CIDR block (10.0.0.0/8)
+        except:                        # Exceptions to CIDR block (optional)
+        - 10.0.0.0/24                 # Exclude this subnet
+        - 10.0.1.0/24                 # Exclude another subnet
+    ports:                            # List of ports (optional, matches all ports if omitted)
+    - protocol: TCP                   # Protocol: TCP, UDP, or SCTP
+      port: 80                        # Port number (can be number or name)
+    - protocol: TCP
+      port: 443
+    - protocol: UDP
+      port: 53
+  - from:                             # Another ingress rule
+    - podSelector:                     # Pod selector
+        matchLabels:
+          app: monitoring
+    ports:
+    - protocol: TCP
+      port: 9090
+  egress:                              # List of egress rules (optional)
+                                    # If omitted and Egress in policyTypes, all egress traffic is denied
+  - to:                               # Destination of traffic (optional, matches all if omitted)
+    - podSelector:                     # Pod selector for destination pods
+        matchLabels:                   # Match pods with labels
+          app: database                # Destination pods must have label app=database
+      namespaceSelector:               # Namespace selector for destination namespace (optional)
+        matchLabels:                   # Match namespaces with labels
+          name: database-ns           # Destination namespace must have label name=database-ns
+    - namespaceSelector:               # Another destination: namespace selector
+        matchLabels:                   # Match namespaces with labels
+          name: allowed-ns            # Destination namespace must have label name=allowed-ns
+    - ipBlock:                         # IP block (CIDR) for destination IPs
+        cidr: 0.0.0.0/0               # CIDR block (0.0.0.0/0 = all IPs)
+        except:                        # Exceptions to CIDR block (optional)
+        - 10.0.0.0/8                  # Exclude private network
+        - 172.16.0.0/12               # Exclude another private network
+        - 192.168.0.0/16              # Exclude another private network
+    ports:                            # List of ports (optional, matches all ports if omitted)
+    - protocol: TCP                   # Protocol: TCP, UDP, or SCTP
+      port: 5432                      # Port number (PostgreSQL default port)
+    - protocol: TCP
+      port: 6379                      # Port number (Redis default port)
+  - to:                               # Another egress rule
+    - ipBlock:                        # IP block for DNS servers
+        cidr: 8.8.8.8/32             # Google DNS
+    ports:
+    - protocol: UDP
+      port: 53                        # DNS port
+    - protocol: TCP
+      port: 53
+
+---
+# Example: Default deny all ingress (allow all egress)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: default
+spec:
+  podSelector: {}                      # Empty selector matches all pods in namespace
+  policyTypes:
+  - Ingress                            # Only Ingress policy type
+  # No ingress rules = deny all ingress traffic
+  # No egress rules = allow all egress traffic
+
+---
+# Example: Default deny all egress (allow all ingress)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-egress
+  namespace: default
+spec:
+  podSelector: {}                      # Empty selector matches all pods in namespace
+  policyTypes:
+  - Egress                             # Only Egress policy type
+  # No ingress rules = allow all ingress traffic
+  # No egress rules = deny all egress traffic
+
+---
+# Example: Allow all traffic (no restrictions)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-all
+  namespace: default
+spec:
+  podSelector:
+    matchLabels:
+      app: public
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:                             # Empty ingress = allow all ingress
+  - {}                                 # Matches all sources and ports
+  egress:                              # Empty egress = allow all egress
+  - {}                                 # Matches all destinations and ports
+
+---
+# Example: Web application NetworkPolicy
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: web-app-policy
+  namespace: default
+spec:
+  podSelector:
+    matchLabels:
+      app: web
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:               # Allow from ingress namespace
+        matchLabels:
+          name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 80
+    - protocol: TCP
+      port: 443
+  egress:
+  - to:
+    - podSelector:                     # Allow to database pods
+        matchLabels:
+          app: database
+    ports:
+    - protocol: TCP
+      port: 5432
+  - to:
+    - ipBlock:                         # Allow DNS
+        cidr: 0.0.0.0/0
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+
+---
+# Example: Database NetworkPolicy (only allow from app pods)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: database-policy
+  namespace: default
+spec:
+  podSelector:
+    matchLabels:
+      app: database
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - podSelector:                     # Only allow from app pods
+        matchLabels:
+          app: web
+    - podSelector:                     # Or from api pods
+        matchLabels:
+          app: api
+    ports:
+    - protocol: TCP
+      port: 5432
+  egress:
+  - {}                                 # Allow all egress (for database replication, etc.)
+
+---
+# Example: Multi-namespace NetworkPolicy
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cross-namespace-policy
+  namespace: frontend
+spec:
+  podSelector:
+    matchLabels:
+      app: frontend
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:               # Allow from specific namespace
+        matchLabels:
+          name: backend
+      podSelector:                     # And specific pods
+        matchLabels:
+          app: api
+    ports:
+    - protocol: TCP
+      port: 8080
+

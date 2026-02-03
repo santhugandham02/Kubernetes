@@ -1,0 +1,165 @@
+apiVersion: v1                      # API version for ResourceQuota resource (v1 is the stable version)
+kind: ResourceQuota                  # Resource type - ResourceQuota limits resource consumption per namespace
+metadata:                            # Metadata section - contains identifying information
+  name: compute-quota                # Name of the ResourceQuota (must be unique within namespace)
+  namespace: default                 # Namespace where ResourceQuota will be created (optional, defaults to 'default')
+  labels:                            # Labels are key-value pairs used for selecting and organizing resources
+    quota: compute                   # Label: quota type
+  annotations:                       # Annotations are metadata that don't affect resource behavior
+    description: "Compute resource quota"  # Custom annotation: human-readable description
+spec:                                # Specification section - defines desired state
+  hard:                              # Hard limits (required) - maximum values that cannot be exceeded
+    # Compute resources
+    requests.cpu: "4"                # Total CPU requests (4 CPU cores)
+    requests.memory: "8Gi"           # Total memory requests (8 gibibytes)
+    limits.cpu: "8"                  # Total CPU limits (8 CPU cores)
+    limits.memory: "16Gi"            # Total memory limits (16 gibibytes)
+    
+    # Storage resources
+    requests.storage: "100Gi"        # Total storage requests (100 gibibytes)
+    persistentvolumeclaims: "10"     # Number of PVCs (10 PVCs)
+    # Storage class specific quotas (optional)
+    requests.storage.storageclass.standard: "50Gi"  # Storage requests for "standard" storage class
+    requests.storage.storageclass.fast-ssd: "50Gi"  # Storage requests for "fast-ssd" storage class
+    
+    # Object count quotas
+    pods: "10"                       # Number of pods (10 pods)
+    services: "5"                    # Number of services (5 services)
+    services.loadbalancers: "2"      # Number of LoadBalancer services (2 LoadBalancers)
+    services.nodeports: "5"          # Number of NodePort services (5 NodePorts)
+    count/deployments.apps: "5"      # Number of Deployments (5 deployments)
+    count/replicasets.apps: "10"     # Number of ReplicaSets (10 replicasets)
+    count/statefulsets.apps: "3"     # Number of StatefulSets (3 statefulsets)
+    count/jobs.batch: "5"            # Number of Jobs (5 jobs)
+    count/cronjobs.batch: "2"        # Number of CronJobs (2 cronjobs)
+    count/daemonsets.apps: "2"       # Number of DaemonSets (2 daemonsets)
+    count/ingresses.networking.k8s.io: "5"  # Number of Ingresses (5 ingresses)
+    count/configmaps: "10"           # Number of ConfigMaps (10 configmaps)
+    count/secrets: "10"              # Number of Secrets (10 secrets)
+    count/persistentvolumeclaims: "10"  # Number of PVCs (10 PVCs)
+    
+    # Extended resources (optional)
+    # requests.nvidia.com/gpu: "4"   # GPU requests (example, requires GPU nodes)
+    # limits.nvidia.com/gpu: "4"     # GPU limits (example, requires GPU nodes)
+
+---
+# Example: CPU and Memory quota only
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: compute-only-quota
+  namespace: default
+spec:
+  hard:
+    requests.cpu: "2"
+    requests.memory: "4Gi"
+    limits.cpu: "4"
+    limits.memory: "8Gi"
+
+---
+# Example: Storage quota only
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: storage-quota
+  namespace: default
+spec:
+  hard:
+    requests.storage: "200Gi"
+    persistentvolumeclaims: "20"
+    requests.storage.storageclass.standard: "100Gi"
+    requests.storage.storageclass.fast-ssd: "100Gi"
+
+---
+# Example: Object count quota only
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: object-count-quota
+  namespace: default
+spec:
+  hard:
+    pods: "20"
+    services: "10"
+    services.loadbalancers: "3"
+    services.nodeports: "10"
+    count/deployments.apps: "10"
+    count/statefulsets.apps: "5"
+    count/jobs.batch: "10"
+    count/cronjobs.batch: "5"
+    count/configmaps: "20"
+    count/secrets: "20"
+
+---
+# Example: Comprehensive quota for production namespace
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: production-quota
+  namespace: production
+spec:
+  hard:
+    # Compute resources
+    requests.cpu: "20"
+    requests.memory: "40Gi"
+    limits.cpu: "40"
+    limits.memory: "80Gi"
+    
+    # Storage resources
+    requests.storage: "500Gi"
+    persistentvolumeclaims: "50"
+    requests.storage.storageclass.standard: "300Gi"
+    requests.storage.storageclass.fast-ssd: "200Gi"
+    
+    # Object counts
+    pods: "100"
+    services: "50"
+    services.loadbalancers: "10"
+    services.nodeports: "20"
+    count/deployments.apps: "50"
+    count/replicasets.apps: "100"
+    count/statefulsets.apps: "10"
+    count/jobs.batch: "20"
+    count/cronjobs.batch: "10"
+    count/daemonsets.apps: "5"
+    count/ingresses.networking.k8s.io: "20"
+    count/configmaps: "100"
+    count/secrets: "100"
+    count/persistentvolumeclaims: "50"
+
+---
+# Example: Quota with scope selector (Kubernetes 1.12+)
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: scoped-quota
+  namespace: default
+spec:
+  hard:
+    requests.cpu: "4"
+    requests.memory: "8Gi"
+    limits.cpu: "8"
+    limits.memory: "16Gi"
+  scopeSelector:                      # Scope selector (optional)
+    matchExpressions:                 # Match expressions
+    - operator: In                   # Operator: In, NotIn, Exists, DoesNotExist
+      scopeName: PriorityClass        # Scope name: PriorityClass, QuotaClass, etc.
+      values:                         # Values for In/NotIn operators
+      - high-priority                 # Priority class name
+      - critical-priority             # Another priority class name
+
+---
+# Example: Quota with scopes (deprecated, use scopeSelector instead)
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: scoped-quota-old
+  namespace: default
+spec:
+  hard:
+    requests.cpu: "4"
+    requests.memory: "8Gi"
+  scopes:                            # Scopes (deprecated, use scopeSelector)
+  - BestEffort                       # Scope: BestEffort, NotBestEffort, Terminating, NotTerminating, PriorityClass
+  - NotTerminating                   # Scope: NotTerminating
+

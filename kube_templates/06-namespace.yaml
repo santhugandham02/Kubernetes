@@ -1,0 +1,71 @@
+apiVersion: v1                      # API version for Namespace resource (v1 is the stable version)
+kind: Namespace                     # Resource type - Namespace provides logical partitioning of cluster resources
+metadata:                           # Metadata section - contains identifying information
+  name: production                  # Name of the Namespace (must be unique cluster-wide, DNS-1123 label format)
+  labels:                           # Labels are key-value pairs used for selecting and organizing resources
+    name: production                # Label: namespace name
+    environment: prod               # Label: environment type
+    team: platform                  # Label: team responsible
+  annotations:                      # Annotations are metadata that don't affect resource behavior
+    description: "Production environment namespace"  # Custom annotation: human-readable description
+    linkerd.io/inject: enabled      # Example: Linkerd service mesh injection annotation
+    # Note: Some annotations have special meaning:
+    # - openshift.io/display-name: Display name in OpenShift UI
+    # - openshift.io/description: Description in OpenShift UI
+    # - scheduler.alpha.kubernetes.io/node-selector: Node selector for pods in namespace
+    # - pod-security.kubernetes.io/enforce: Pod security standard enforcement
+    # - pod-security.kubernetes.io/audit: Pod security standard audit mode
+    # - pod-security.kubernetes.io/warn: Pod security standard warn mode
+    pod-security.kubernetes.io/enforce: "restricted"  # Enforce restricted pod security standard
+    pod-security.kubernetes.io/audit: "restricted"    # Audit restricted pod security standard
+    pod-security.kubernetes.io/warn: "restricted"     # Warn for restricted pod security standard
+spec:                                # Specification section (currently empty, reserved for future use)
+  # Note: Namespace spec is currently empty but reserved for future features
+  # Future features might include:
+  # - Resource quotas
+  # - Network policies
+  # - Limit ranges
+  # - etc.
+
+---
+# Example: Namespace with finalizers (for controlled deletion)
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: staging
+  labels:
+    environment: staging
+  finalizers:                       # Finalizers prevent namespace deletion until conditions are met
+  - kubernetes                      # Kubernetes finalizer (prevents deletion until all resources are removed)
+  # Custom finalizers can be added for custom controllers:
+  # - custom-controller/cleanup
+spec: {}
+
+---
+# Example: Namespace with node selector annotation (OpenShift/Kubernetes)
+# Note: scheduler.alpha.kubernetes.io/node-selector is an ALPHA-level annotation
+# It may not be available in all Kubernetes distributions
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gpu-namespace
+  annotations:
+    scheduler.alpha.kubernetes.io/node-selector: "gpu=true"  # ALPHA: Node selector for all pods in namespace (OpenShift/alpha feature)
+  labels:
+    name: gpu-namespace
+spec: {}
+
+---
+# Example: Namespace with pod security standards (Kubernetes 1.23+)
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: secure-namespace
+  labels:
+    pod-security.kubernetes.io/enforce: restricted      # Enforce restricted policy
+    pod-security.kubernetes.io/audit: restricted        # Audit restricted policy
+    pod-security.kubernetes.io/warn: restricted         # Warn for restricted policy
+  annotations:
+    description: "Namespace with restricted pod security"
+spec: {}
+

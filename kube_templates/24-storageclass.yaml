@@ -1,0 +1,187 @@
+apiVersion: storage.k8s.io/v1       # API version for StorageClass resource (storage.k8s.io/v1 is the stable version)
+kind: StorageClass                   # Resource type - StorageClass describes storage classes for dynamic provisioning
+metadata:                            # Metadata section - contains identifying information
+  name: fast-ssd                     # Name of the StorageClass (must be unique cluster-wide)
+  labels:                            # Labels are key-value pairs used for selecting and organizing resources
+    storage: fast                    # Label: storage type
+  annotations:                       # Annotations are metadata that don't affect resource behavior
+    description: "Fast SSD storage class"  # Custom annotation: human-readable description
+    storageclass.kubernetes.io/is-default-class: "true"  # Mark as default storage class (optional)
+                                    # Only one StorageClass can be default per cluster
+  # Note: StorageClass is cluster-scoped, so no namespace field
+provisioner: kubernetes.io/aws-ebs   # Provisioner (required) - determines which volume plugin to use
+                                    # Common provisioners:
+                                    # - kubernetes.io/aws-ebs (AWS EBS)
+                                    # - kubernetes.io/gce-pd (GCP Persistent Disk)
+                                    # - kubernetes.io/azure-disk (Azure Disk)
+                                    # - kubernetes.io/cinder (OpenStack Cinder)
+                                    # - kubernetes.io/vsphere-volume (vSphere)
+                                    # - kubernetes.io/glusterfs (GlusterFS)
+                                    # - kubernetes.io/cephfs (CephFS)
+                                    # - kubernetes.io/rbd (Ceph RBD)
+                                    # - kubernetes.io/quobyte (Quobyte)
+                                    # - kubernetes.io/portworx-volume (Portworx)
+                                    # - kubernetes.io/scaleio (ScaleIO)
+                                    # - csi-driver-name (CSI drivers)
+parameters:                          # Parameters for the provisioner (optional)
+                                    # Parameters vary by provisioner
+  type: gp3                         # EBS volume type: gp3, gp2, io1, io2, st1, sc1
+  iops: "3000"                      # IOPS (for gp3, io1, io2)
+  throughput: "125"                # Throughput in MiB/s (for gp3)
+  fsType: ext4                      # Filesystem type: ext4, xfs, etc.
+  encrypted: "true"                  # Enable encryption (for EBS)
+  kmsKeyId: "arn:aws:kms:..."      # KMS key ID for encryption (optional)
+reclaimPolicy: Delete               # Reclaim policy: Retain or Delete (default: Delete)
+                                    # Retain: keep volume after PVC deletion
+                                    # Delete: delete volume after PVC deletion
+allowVolumeExpansion: true          # Allow volume expansion (default: false)
+                                    # When true, PVCs can request size increases
+volumeBindingMode: WaitForFirstConsumer  # Volume binding mode: Immediate or WaitForFirstConsumer
+                                    # Immediate: bind immediately when PVC is created
+                                    # WaitForFirstConsumer: wait until pod using PVC is scheduled
+allowedTopologies:                  # Allowed topologies (optional)
+                                    # Restricts where volumes can be provisioned
+- matchLabelExpressions:            # Match label expressions
+  - key: topology.kubernetes.io/zone  # Topology key
+    values:                         # Allowed values
+    - us-west-1a                    # Availability zone 1
+    - us-west-1b                    # Availability zone 2
+    - us-west-1c                    # Availability zone 3
+
+---
+# Example: AWS EBS StorageClass
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: aws-ebs-gp3
+provisioner: kubernetes.io/aws-ebs
+parameters:
+  type: gp3                         # GP3 volume type
+  iops: "3000"                      # IOPS
+  throughput: "125"                 # Throughput (MiB/s)
+  fsType: ext4                      # Filesystem type
+  encrypted: "true"                 # Enable encryption
+reclaimPolicy: Delete
+allowVolumeExpansion: true
+volumeBindingMode: WaitForFirstConsumer
+allowedTopologies:
+- matchLabelExpressions:
+  - key: topology.kubernetes.io/zone
+    values:
+    - us-west-1a
+    - us-west-1b
+
+---
+# Example: GCP Persistent Disk StorageClass
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: gcp-pd-ssd
+provisioner: kubernetes.io/gce-pd
+parameters:
+  type: pd-ssd                      # SSD persistent disk
+  replication-type: regional-pd     # Regional persistent disk
+  zones: us-west1-a,us-west1-b      # Zones (comma-separated)
+reclaimPolicy: Delete
+allowVolumeExpansion: true
+volumeBindingMode: WaitForFirstConsumer
+
+---
+# Example: Azure Disk StorageClass
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: azure-disk-premium
+provisioner: kubernetes.io/azure-disk
+parameters:
+  storageaccounttype: Premium_LRS   # Premium locally redundant storage
+  kind: Managed                      # Managed disk
+  cachingMode: ReadWrite             # Caching mode
+reclaimPolicy: Delete
+allowVolumeExpansion: true
+volumeBindingMode: WaitForFirstConsumer
+
+---
+# Example: NFS StorageClass (using CSI driver)
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: nfs-storage
+provisioner: nfs.csi.k8s.io          # NFS CSI driver
+parameters:
+  server: nfs-server.example.com    # NFS server
+  share: /exports                    # NFS share path
+reclaimPolicy: Retain                # Retain volumes (NFS doesn't support delete)
+allowVolumeExpansion: true
+volumeBindingMode: Immediate
+
+---
+# Example: Ceph RBD StorageClass
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: ceph-rbd
+provisioner: kubernetes.io/rbd
+parameters:
+  monitors: 192.168.1.100:6789,192.168.1.101:6789  # Ceph monitors (comma-separated)
+  adminId: admin                     # Ceph admin ID
+  adminSecretName: ceph-admin-secret  # Secret name for admin credentials
+  adminSecretNamespace: default      # Secret namespace
+  pool: rbd                          # RBD pool name
+  userId: kube                       # Ceph user ID
+  userSecretName: ceph-user-secret   # Secret name for user credentials
+  userSecretNamespace: default       # Secret namespace
+  fsType: ext4                       # Filesystem type
+  imageFormat: "2"                   # Image format
+  imageFeatures: layering            # Image features
+reclaimPolicy: Delete
+allowVolumeExpansion: true
+volumeBindingMode: Immediate
+
+---
+# Example: GlusterFS StorageClass
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: glusterfs
+provisioner: kubernetes.io/glusterfs
+parameters:
+  resturl: http://glusterfs.example.com:8080  # GlusterFS REST server
+  restuser: admin                    # REST server user
+  secretNamespace: default           # Secret namespace
+  secretName: glusterfs-secret       # Secret name
+  gidMin: "40000"                    # Minimum GID
+  gidMax: "50000"                    # Maximum GID
+  volumetype: replicate:3            # Volume type
+reclaimPolicy: Delete
+allowVolumeExpansion: true
+volumeBindingMode: Immediate
+
+---
+# Example: Default StorageClass
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: standard
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"  # Mark as default
+provisioner: kubernetes.io/aws-ebs
+parameters:
+  type: gp2                          # Standard GP2 volume
+reclaimPolicy: Delete
+allowVolumeExpansion: true
+volumeBindingMode: WaitForFirstConsumer
+
+---
+# Example: StorageClass with Retain policy
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: retain-storage
+provisioner: kubernetes.io/aws-ebs
+parameters:
+  type: gp3
+reclaimPolicy: Retain               # Retain volumes after PVC deletion
+allowVolumeExpansion: true
+volumeBindingMode: WaitForFirstConsumer
+

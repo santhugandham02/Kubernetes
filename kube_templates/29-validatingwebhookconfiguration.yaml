@@ -1,0 +1,219 @@
+apiVersion: admissionregistration.k8s.io/v1  # API version for ValidatingWebhookConfiguration resource
+kind: ValidatingWebhookConfiguration        # Resource type - ValidatingWebhookConfiguration defines validating admission webhooks
+metadata:                                    # Metadata section - contains identifying information
+  name: example-validating-webhook          # Name of the ValidatingWebhookConfiguration (must be unique cluster-wide)
+  labels:                                   # Labels are key-value pairs used for selecting and organizing resources
+    webhook: validating                     # Label: webhook type
+  annotations:                              # Annotations are metadata that don't affect resource behavior
+    description: "Example validating webhook"  # Custom annotation: human-readable description
+  # Note: ValidatingWebhookConfiguration is cluster-scoped, so no namespace field
+webhooks:                                   # List of webhooks (required)
+- name: example-validating-webhook.example.com  # Webhook name (required) - must be unique
+  admissionReviewVersions:                   # Supported admission review versions (required)
+  - v1                                      # Version 1
+  - v1beta1                                 # Version 1beta1 (for older clusters)
+  clientConfig:                              # Client configuration (required)
+    url: https://webhook.example.com/validate  # Webhook URL (for external webhook)
+    # Alternative: service reference (for in-cluster webhook)
+    # service:
+    #   namespace: default
+    #   name: webhook-service
+    #   path: /validate
+    #   port: 443
+    caBundle: LS0tLS1CRUdJTi...              # CA bundle for TLS verification (base64 encoded)
+                                            # Required for TLS connections
+  rules:                                     # Rules for when to call webhook (required)
+  - apiGroups:                               # API groups
+    - ""                                     # Empty string = core API group
+    - apps                                   # Apps API group
+    apiVersions:                             # API versions
+    - v1
+    - v1beta1
+    resources:                               # Resources
+    - pods
+    - deployments
+    operations:                               # Operations to intercept
+    - CREATE                                 # Create operation
+    - UPDATE                                 # Update operation
+    - DELETE                                 # Delete operation
+    # Note: CONNECT operation is not supported for validating webhooks
+  namespaceSelector:                         # Namespace selector (optional)
+    matchLabels:                             # Match namespaces with labels
+      environment: production                # Namespace must have label environment=production
+  objectSelector:                            # Object selector (optional, Kubernetes 1.15+)
+    matchLabels:                             # Match objects with labels
+      app: nginx                             # Object must have label app=nginx
+  sideEffects: None                         # Side effects: None, NoneOnDryRun, or Some
+                                            # None: webhook has no side effects
+                                            # NoneOnDryRun: webhook has no side effects on dry-run
+                                            # Some: webhook may have side effects
+  timeoutSeconds: 10                         # Timeout in seconds (default: 10)
+  failurePolicy: Fail                        # Failure policy: Ignore or Fail (default: Fail)
+                                            # Ignore: allow request if webhook fails
+                                            # Fail: reject request if webhook fails
+  matchPolicy: Equivalent                    # Match policy: Exact or Equivalent (default: Equivalent)
+                                            # Exact: match exact API version
+                                            # Equivalent: match equivalent API versions
+
+---
+# Example: Validating webhook with service reference
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: in-cluster-validating-webhook
+webhooks:
+- name: in-cluster-validating-webhook.example.com
+  admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:                                # Service reference (in-cluster webhook)
+      namespace: default                    # Service namespace
+      name: webhook-service                # Service name
+      path: /validate                       # Webhook path
+      port: 443                            # Service port
+    caBundle: LS0tLS1CRUdJTi...            # CA bundle
+  rules:
+  - apiGroups:
+    - ""
+    apiVersions:
+    - v1
+    resources:
+    - pods
+    operations:
+    - CREATE
+    - UPDATE
+  sideEffects: None
+  failurePolicy: Fail
+
+---
+# Example: Validating webhook for specific resources only
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: pod-validating-webhook
+webhooks:
+- name: pod-validating-webhook.example.com
+  admissionReviewVersions:
+  - v1
+  clientConfig:
+    url: https://webhook.example.com/validate-pods
+    caBundle: LS0tLS1CRUdJTi...
+  rules:
+  - apiGroups:
+    - ""
+    apiVersions:
+    - v1
+    resources:
+    - pods
+    operations:
+    - CREATE
+    - UPDATE
+  objectSelector:                           # Only validate pods with specific labels
+    matchLabels:
+      validate: "true"
+  sideEffects: None
+  failurePolicy: Fail
+  timeoutSeconds: 5
+
+---
+# Example: Validating webhook with namespace selector
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: production-validating-webhook
+webhooks:
+- name: production-validating-webhook.example.com
+  admissionReviewVersions:
+  - v1
+  clientConfig:
+    url: https://webhook.example.com/validate
+    caBundle: LS0tLS1CRUdJTi...
+  rules:
+  - apiGroups:
+    - ""
+    - apps
+    apiVersions:
+    - v1
+    resources:
+    - pods
+    - deployments
+    operations:
+    - CREATE
+    - UPDATE
+  namespaceSelector:                         # Only validate resources in production namespace
+    matchLabels:
+      environment: production
+  sideEffects: None
+  failurePolicy: Fail
+
+---
+# Example: Validating webhook with Ignore failure policy
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: advisory-validating-webhook
+webhooks:
+- name: advisory-validating-webhook.example.com
+  admissionReviewVersions:
+  - v1
+  clientConfig:
+    url: https://webhook.example.com/advisory-validate
+    caBundle: LS0tLS1CRUdJTi...
+  rules:
+  - apiGroups:
+    - ""
+    apiVersions:
+    - v1
+    resources:
+    - pods
+    operations:
+    - CREATE
+    - UPDATE
+  sideEffects: None
+  failurePolicy: Ignore                     # Ignore failures (advisory only)
+  timeoutSeconds: 5
+
+---
+# Example: Multiple webhooks in one configuration
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: multi-webhook-config
+webhooks:
+- name: pod-validator.example.com
+  admissionReviewVersions:
+  - v1
+  clientConfig:
+    url: https://webhook.example.com/validate-pods
+    caBundle: LS0tLS1CRUdJTi...
+  rules:
+  - apiGroups:
+    - ""
+    apiVersions:
+    - v1
+    resources:
+    - pods
+    operations:
+    - CREATE
+    - UPDATE
+  sideEffects: None
+  failurePolicy: Fail
+- name: deployment-validator.example.com
+  admissionReviewVersions:
+  - v1
+  clientConfig:
+    url: https://webhook.example.com/validate-deployments
+    caBundle: LS0tLS1CRUdJTi...
+  rules:
+  - apiGroups:
+    - apps
+    apiVersions:
+    - v1
+    resources:
+    - deployments
+    operations:
+    - CREATE
+    - UPDATE
+  sideEffects: None
+  failurePolicy: Fail
+

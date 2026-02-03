@@ -1,0 +1,233 @@
+apiVersion: v1                      # API version for Endpoints resource (v1 is the stable version)
+kind: Endpoints                      # Resource type - Endpoints tracks IP addresses of pods backing a service
+metadata:                            # Metadata section - contains identifying information
+  name: my-service                   # Name of the Endpoints (must match Service name)
+  namespace: default                # Namespace where Endpoints will be created (optional, defaults to 'default')
+  labels:                           # Labels are key-value pairs used for selecting and organizing resources
+    app: myapp                       # Label: application name
+  annotations:                      # Annotations are metadata that don't affect resource behavior
+    description: "Endpoints for my-service"  # Custom annotation: human-readable description
+    # Note: Endpoints are usually auto-managed by Kubernetes Service controller
+    # This example shows manual creation
+subsets:                            # List of endpoint subsets (required)
+- addresses:                        # List of endpoint addresses
+  - ip: 10.244.1.5                 # Pod IP address
+    hostname: pod-1                 # Hostname (optional)
+    nodeName: node-1               # Node name (optional)
+    targetRef:                      # Reference to pod (optional)
+      kind: Pod                     # Kind: Pod
+      namespace: default            # Pod namespace
+      name: pod-1                   # Pod name
+      uid: "12345678-1234-1234-1234-123456789012"  # Pod UID
+  - ip: 10.244.1.6                 # Another pod IP
+    targetRef:
+      kind: Pod
+      namespace: default
+      name: pod-2
+  notReadyAddresses:                # List of not-ready endpoint addresses (optional)
+  - ip: 10.244.1.7                 # Pod IP that's not ready
+    targetRef:
+      kind: Pod
+      namespace: default
+      name: pod-3
+  ports:                            # List of ports (required)
+  - name: http                      # Port name (optional)
+    port: 80                        # Port number
+    protocol: TCP                   # Protocol: TCP, UDP, or SCTP
+  - name: https
+    port: 443
+    protocol: TCP
+- addresses:                        # Another subset (for different port combinations)
+  - ip: 10.244.2.5
+    targetRef:
+      kind: Pod
+      namespace: default
+      name: pod-4
+  ports:
+  - port: 8080
+    protocol: TCP
+
+---
+# Example: Endpoints for headless service
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: headless-service
+  namespace: default
+subsets:
+- addresses:
+  - ip: 10.244.1.10
+    targetRef:
+      kind: Pod
+      namespace: default
+      name: stateful-pod-0
+  - ip: 10.244.1.11
+    targetRef:
+      kind: Pod
+      namespace: default
+      name: stateful-pod-1
+  ports:
+  - port: 8080
+    protocol: TCP
+
+---
+# Example: EndpointSlice - more scalable alternative to Endpoints (Kubernetes 1.19+)
+apiVersion: discovery.k8s.io/v1     # API version for EndpointSlice resource (discovery.k8s.io/v1)
+kind: EndpointSlice                  # Resource type - EndpointSlice represents a subset of network endpoints
+metadata:                            # Metadata section - contains identifying information
+  name: my-service-abc123            # Name of the EndpointSlice (must be unique within namespace)
+                                    # Format: <service-name>-<slice-index>
+  namespace: default                # Namespace where EndpointSlice will be created (optional, defaults to 'default')
+  labels:                           # Labels are key-value pairs used for selecting and organizing resources
+    kubernetes.io/service-name: my-service  # Required label: service name
+    discovery.kubernetes.io/endpointslice-type: Standard  # EndpointSlice type
+  annotations:                      # Annotations are metadata that don't affect resource behavior
+    description: "EndpointSlice for my-service"  # Custom annotation: human-readable description
+addressType: IPv4                    # Address type: IPv4, IPv6, or FQDN (required)
+                                    # IPv4: IPv4 addresses
+                                    # IPv6: IPv6 addresses
+                                    # FQDN: Fully qualified domain names
+endpoints:                          # List of endpoints (required)
+- addresses:                         # List of addresses for this endpoint
+  - "10.244.1.5"                    # IPv4 address
+  conditions:                        # Endpoint conditions
+    ready: true                      # Ready condition: true if endpoint is ready
+    serving: true                    # Serving condition: true if endpoint is serving (Kubernetes 1.19+)
+    terminating: false               # Terminating condition: true if endpoint is terminating (Kubernetes 1.20+)
+  hostname: pod-1                    # Hostname (optional)
+  targetRef:                         # Reference to pod (optional)
+    kind: Pod                        # Kind: Pod
+    namespace: default              # Pod namespace
+    name: pod-1                      # Pod name
+    uid: "12345678-1234-1234-1234-123456789012"  # Pod UID
+  nodeName: node-1                   # Node name (optional)
+  zone: us-west-1a                  # Zone/region (optional)
+  hints:                            # Endpoint hints (optional, Kubernetes 1.21+)
+    forZones:                       # Zones this endpoint should be used for
+    - name: us-west-1a              # Zone name
+- addresses:                         # Another endpoint
+  - "10.244.1.6"
+  conditions:
+    ready: true
+    serving: true
+    terminating: false
+  targetRef:
+    kind: Pod
+    namespace: default
+    name: pod-2
+ports:                               # List of ports (optional)
+- name: http                        # Port name (optional)
+  port: 80                          # Port number
+  protocol: TCP                     # Protocol: TCP, UDP, or SCTP
+  appProtocol: http                 # Application protocol (optional, Kubernetes 1.19+)
+- name: https
+  port: 443
+  protocol: TCP
+  appProtocol: https
+
+---
+# Example: EndpointSlice with IPv6 addresses
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  name: my-service-ipv6-xyz789
+  namespace: default
+  labels:
+    kubernetes.io/service-name: my-service
+addressType: IPv6                    # IPv6 address type
+endpoints:
+- addresses:
+  - "2001:db8::1"                   # IPv6 address
+  conditions:
+    ready: true
+    serving: true
+    terminating: false
+  targetRef:
+    kind: Pod
+    namespace: default
+    name: pod-ipv6-1
+ports:
+- port: 80
+  protocol: TCP
+
+---
+# Example: EndpointSlice with FQDN addresses
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  name: external-service-abc123
+  namespace: default
+  labels:
+    kubernetes.io/service-name: external-service
+addressType: FQDN                    # FQDN address type
+endpoints:
+- addresses:
+  - "external.example.com"           # FQDN address
+  conditions:
+    ready: true
+    serving: true
+    terminating: false
+ports:
+- port: 443
+  protocol: TCP
+
+---
+# Example: EndpointSlice with not-ready endpoints
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  name: my-service-not-ready-xyz
+  namespace: default
+  labels:
+    kubernetes.io/service-name: my-service
+addressType: IPv4
+endpoints:
+- addresses:
+  - "10.244.1.5"
+  conditions:
+    ready: true                      # Ready endpoint
+    serving: true
+    terminating: false
+  targetRef:
+    kind: Pod
+    namespace: default
+    name: pod-1
+- addresses:
+  - "10.244.1.7"
+  conditions:
+    ready: false                     # Not ready endpoint
+    serving: false
+    terminating: false
+  targetRef:
+    kind: Pod
+    namespace: default
+    name: pod-3
+ports:
+- port: 80
+  protocol: TCP
+
+---
+# Example: EndpointSlice with terminating endpoints
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  name: my-service-terminating-xyz
+  namespace: default
+  labels:
+    kubernetes.io/service-name: my-service
+addressType: IPv4
+endpoints:
+- addresses:
+  - "10.244.1.5"
+  conditions:
+    ready: false                     # Not ready (terminating)
+    serving: false
+    terminating: true                # Terminating endpoint
+  targetRef:
+    kind: Pod
+    namespace: default
+    name: pod-terminating
+ports:
+- port: 80
+  protocol: TCP
+

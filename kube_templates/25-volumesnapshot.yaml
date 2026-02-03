@@ -1,0 +1,132 @@
+apiVersion: snapshot.storage.k8s.io/v1  # API version for VolumeSnapshot resource (snapshot.storage.k8s.io/v1 is the stable version)
+kind: VolumeSnapshot                   # Resource type - VolumeSnapshot represents a snapshot of a volume
+metadata:                               # Metadata section - contains identifying information
+  name: pvc-snapshot                  # Name of the VolumeSnapshot (must be unique within namespace)
+  namespace: default                   # Namespace where VolumeSnapshot will be created (optional, defaults to 'default')
+  labels:                              # Labels are key-value pairs used for selecting and organizing resources
+    app: database                      # Label: application name
+    snapshot-type: manual              # Label: snapshot type
+  annotations:                         # Annotations are metadata that don't affect resource behavior
+    description: "Snapshot of database PVC"  # Custom annotation: human-readable description
+spec:                                   # Specification section - defines desired state
+  source:                              # Source of the snapshot (required)
+    persistentVolumeClaimName: my-pvc  # Name of the PVC to snapshot
+    # Alternative: volumeSnapshotContentName (for pre-provisioned snapshots)
+    # volumeSnapshotContentName: pre-provisioned-snapshot
+  volumeSnapshotClassName: csi-snapshot-class  # VolumeSnapshotClass name (optional)
+                                    # Defines snapshot parameters (similar to StorageClass)
+                                    # If omitted, uses default VolumeSnapshotClass
+
+---
+# Example: VolumeSnapshot with VolumeSnapshotClass
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshot
+metadata:
+  name: db-snapshot
+  namespace: default
+spec:
+  source:
+    persistentVolumeClaimName: database-pvc
+  volumeSnapshotClassName: csi-snapshot-class
+
+---
+# Example: VolumeSnapshot from pre-provisioned snapshot
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshot
+metadata:
+  name: pre-provisioned-snapshot
+  namespace: default
+spec:
+  source:
+    volumeSnapshotContentName: pre-provisioned-content  # Pre-provisioned snapshot content
+  volumeSnapshotClassName: csi-snapshot-class
+
+---
+# Example: VolumeSnapshotClass - defines snapshot parameters
+apiVersion: snapshot.storage.k8s.io/v1  # API version for VolumeSnapshotClass resource
+kind: VolumeSnapshotClass                # Resource type - VolumeSnapshotClass defines snapshot parameters
+metadata:                                # Metadata section - contains identifying information
+  name: csi-snapshot-class              # Name of the VolumeSnapshotClass (must be unique cluster-wide)
+  labels:                               # Labels are key-value pairs used for selecting and organizing resources
+    snapshot: csi                       # Label: snapshot type
+  annotations:                          # Annotations are metadata that don't affect resource behavior
+    description: "CSI snapshot class"   # Custom annotation: human-readable description
+    snapshot.storage.kubernetes.io/is-default-class: "true"  # Mark as default (optional)
+  # Note: VolumeSnapshotClass is cluster-scoped, so no namespace field
+driver: ebs.csi.aws.com                # Driver name (required) - CSI driver that handles snapshots
+                                    # Must match the CSI driver name
+deletionPolicy: Delete                 # Deletion policy: Retain or Delete (default: Delete)
+                                    # Retain: keep snapshot after VolumeSnapshot deletion
+                                    # Delete: delete snapshot after VolumeSnapshot deletion
+parameters:                            # Parameters for the driver (optional)
+                                    # Parameters vary by driver
+  tagSpecification_1: "ResourceType=Snapshot,Tags=[{Key=Name,Value=my-snapshot}]"  # AWS tags
+  # Example for other drivers:
+  # location: us-west-1                # Location/region
+  # storageLocation: bucket-name       # Storage location
+
+---
+# Example: VolumeSnapshotClass for AWS EBS CSI
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshotClass
+metadata:
+  name: aws-ebs-snapshot-class
+driver: ebs.csi.aws.com
+deletionPolicy: Delete
+parameters:
+  tagSpecification_1: "ResourceType=Snapshot,Tags=[{Key=Environment,Value=production}]"
+
+---
+# Example: VolumeSnapshotClass for GCP GCE CSI
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshotClass
+metadata:
+  name: gcp-gce-snapshot-class
+driver: pd.csi.storage.gke.io
+deletionPolicy: Delete
+parameters:
+  location: us-west1                  # GCP region
+
+---
+# Example: VolumeSnapshotClass with Retain policy
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshotClass
+metadata:
+  name: retain-snapshot-class
+driver: ebs.csi.aws.com
+deletionPolicy: Retain                # Retain snapshots after VolumeSnapshot deletion
+parameters: {}
+
+---
+# Example: VolumeSnapshotContent - represents actual snapshot in cluster (usually auto-created)
+apiVersion: snapshot.storage.k8s.io/v1  # API version for VolumeSnapshotContent resource
+kind: VolumeSnapshotContent             # Resource type - VolumeSnapshotContent represents actual snapshot
+metadata:                                # Metadata section - contains identifying information
+  name: snapshot-content-1             # Name of the VolumeSnapshotContent (must be unique cluster-wide)
+  labels:                               # Labels are key-value pairs used for selecting and organizing resources
+    snapshot: content                   # Label: snapshot type
+  annotations:                          # Annotations are metadata that don't affect resource behavior
+    description: "Snapshot content"      # Custom annotation: human-readable description
+  # Note: VolumeSnapshotContent is cluster-scoped, so no namespace field
+spec:                                    # Specification section - defines desired state
+  source:                                # Source of the snapshot (required)
+    volumeHandle: vol-12345678          # Volume handle (driver-specific identifier)
+  volumeSnapshotClassName: csi-snapshot-class  # VolumeSnapshotClass name (optional)
+  deletionPolicy: Delete                # Deletion policy: Retain or Delete (default: Delete)
+  driver: ebs.csi.aws.com               # Driver name (required) - CSI driver that handles snapshots
+  # Note: VolumeSnapshotContent is usually auto-created by the snapshot controller
+  # This example shows manual creation for pre-provisioned snapshots
+
+---
+# Example: VolumeSnapshotContent for pre-provisioned snapshot
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshotContent
+metadata:
+  name: pre-provisioned-content
+spec:
+  source:
+    snapshotHandle: snap-12345678       # Snapshot handle (driver-specific identifier)
+  volumeSnapshotClassName: csi-snapshot-class
+  deletionPolicy: Retain
+  driver: ebs.csi.aws.com
+

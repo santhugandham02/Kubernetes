@@ -1,0 +1,134 @@
+apiVersion: v1                      # API version for ConfigMap resource (v1 is the stable version)
+kind: ConfigMap                     # Resource type - ConfigMap stores configuration data as key-value pairs
+metadata:                           # Metadata section - contains identifying information
+  name: app-config                 # Name of the ConfigMap (must be unique within namespace)
+  namespace: default               # Namespace where ConfigMap will be created (optional, defaults to 'default')
+  labels:                          # Labels are key-value pairs used for selecting and organizing resources
+    app: nginx                     # Label: application name
+    config: app                    # Label: configuration type
+  annotations:                     # Annotations are metadata that don't affect resource behavior
+    description: "Application configuration"  # Custom annotation: human-readable description
+data:                               # Data section - contains key-value pairs (plain text)
+  # Simple key-value pairs
+  database_url: "postgresql://localhost:5432/mydb"  # Key: database_url, Value: database connection string
+  api_endpoint: "https://api.example.com"  # Key: api_endpoint, Value: API endpoint URL
+  log_level: "info"                # Key: log_level, Value: logging level
+  
+  # Multi-line values (using | for literal block or > for folded block)
+  nginx.conf: |                    # Key: nginx.conf, Value: multi-line nginx configuration
+    server {
+        listen 80;
+        server_name example.com;
+        root /var/www/html;
+        
+        location / {
+            try_files $uri $uri/ /index.html;
+        }
+    }
+  
+  # Another multi-line example using folded block (>)
+  app.properties: >                # Key: app.properties, Value: folded multi-line (newlines become spaces)
+    server.port=8080
+    server.host=0.0.0.0
+    logging.level.root=INFO
+    logging.level.com.example=DEBUG
+  
+  # JSON configuration
+  app.json: |                      # Key: app.json, Value: JSON configuration
+    {
+      "database": {
+        "host": "localhost",
+        "port": 5432,
+        "name": "mydb"
+      },
+      "cache": {
+        "enabled": true,
+        "ttl": 3600
+      }
+    }
+  
+  # YAML configuration
+  app.yaml: |                      # Key: app.yaml, Value: YAML configuration
+    database:
+      host: localhost
+      port: 5432
+      name: mydb
+    cache:
+      enabled: true
+      ttl: 3600
+  
+  # Environment-specific values
+  environment: "production"        # Key: environment, Value: environment name
+  max_connections: "100"           # Key: max_connections, Value: maximum connections (as string)
+  enable_feature_x: "true"          # Key: enable_feature_x, Value: feature flag (as string)
+
+---
+# Example: ConfigMap with binary data
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config-binary
+  namespace: default
+binaryData:                         # BinaryData section - contains binary data (base64 encoded)
+  # Note: binaryData and data are mutually exclusive in the same ConfigMap
+  # Binary data must be base64 encoded
+  certificate.pem: LS0tLS1CRUdJTi...  # Key: certificate.pem, Value: base64-encoded certificate
+  image.png: iVBORw0KGgoAAAANS...    # Key: image.png, Value: base64-encoded image
+
+---
+# Example: ConfigMap with both data and binaryData (Kubernetes 1.19+)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config-mixed
+  namespace: default
+data:                               # Text data
+  config.yaml: |
+    database:
+      host: localhost
+      port: 5432
+  log_level: "info"
+binaryData:                         # Binary data (Kubernetes 1.19+)
+  cert.pem: LS0tLS1CRUdJTi...      # Base64-encoded certificate
+  key.pem: LS0tLS1CRUdJTi...       # Base64-encoded key
+
+---
+# Example: ConfigMap from file (kubectl create configmap app-config --from-file=config.properties)
+# This is how you would create it via kubectl, but here's the equivalent YAML:
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config-from-file
+  namespace: default
+data:
+  config.properties: |              # File content would be here
+    key1=value1
+    key2=value2
+
+---
+# Example: ConfigMap from literal values (kubectl create configmap app-config --from-literal=key1=value1)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config-from-literal
+  namespace: default
+data:
+  key1: "value1"                    # Literal key-value pair
+  key2: "value2"                    # Another literal key-value pair
+  key3: "value3"                    # Yet another literal key-value pair
+
+---
+# Example: ConfigMap with immutable flag (Kubernetes 1.19+)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config-immutable
+  namespace: default
+data:
+  config.yaml: |
+    database:
+      host: localhost
+immutable: true                     # Immutable flag - prevents changes after creation (default: false)
+                                    # Once set to true, cannot be changed back to false
+                                    # Useful for performance optimization and preventing accidental changes
+

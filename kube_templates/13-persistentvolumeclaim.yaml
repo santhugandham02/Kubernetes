@@ -1,0 +1,162 @@
+apiVersion: v1                      # API version for PersistentVolumeClaim resource (v1 is the stable version)
+kind: PersistentVolumeClaim         # Resource type - PersistentVolumeClaim is a request for storage by a user
+metadata:                           # Metadata section - contains identifying information
+  name: my-pvc                     # Name of the PersistentVolumeClaim (must be unique within namespace)
+  namespace: default               # Namespace where PVC will be created (optional, defaults to 'default')
+  labels:                          # Labels are key-value pairs used for selecting and organizing resources
+    app: nginx                     # Label: application name
+    storage: data                  # Label: storage type
+  annotations:                     # Annotations are metadata that don't affect resource behavior
+    description: "Data storage PVC"  # Custom annotation: human-readable description
+    # Note: volume.beta.kubernetes.io/storage-class annotation is DEPRECATED
+    # Use spec.storageClassName instead (see below)
+    # volume.beta.kubernetes.io/storage-class: "fast-ssd"  # DEPRECATED: Use spec.storageClassName instead
+spec:                               # Specification section - defines desired state
+  accessModes:                     # Access modes - how volume can be mounted
+  - ReadWriteOnce                  # Single node read-write access (RWO)
+                                    # Most common, works with most storage types
+  - ReadOnlyMany                   # Multiple nodes read-only access (ROX)
+                                    # Less common, used for read-only shared data
+  - ReadWriteMany                  # Multiple nodes read-write access (RWX)
+                                    # Requires storage that supports concurrent access (NFS, CephFS, etc.)
+  resources:                       # Resource requests
+    requests:                      # Storage request
+      storage: 10Gi                # Storage size (10 gibibytes)
+                                    # Can use: Gi (gibibytes), Mi (mebibytes), Ti (tebibytes)
+                                    # Must match or be less than PV capacity
+  storageClassName: fast-ssd       # Storage class name (optional)
+                                    # Used for dynamic provisioning
+                                    # If omitted, uses default storage class (if configured)
+                                    # If set to "", no storage class (binds to unbound PVs)
+  volumeMode: Filesystem           # Volume mode: Filesystem (default) or Block
+                                    # Filesystem: mounted as filesystem
+                                    # Block: exposed as raw block device
+                                    # Must match PV volumeMode
+  selector:                        # Label selector for PV (optional)
+                                    # Used to select specific PVs to bind to
+    matchLabels:                   # Match PVs with exact label matches
+      type: local                  # PV must have label type=local
+      zone: us-west-1a             # PV must have label zone=us-west-1a
+    matchExpressions:               # Advanced selector using expressions (optional)
+    - key: type                     # Label key to match
+      operator: In                  # Operator: In, NotIn, Exists, DoesNotExist
+      values:                       # Values for In/NotIn operators
+      - local
+      - nfs
+  dataSource:                      # Data source for volume (optional, Kubernetes 1.18+)
+                                    # Used to create volume from snapshot or clone
+    name: snapshot-name            # Name of VolumeSnapshot or PVC
+    kind: VolumeSnapshot            # Kind: VolumeSnapshot or PersistentVolumeClaim
+    apiGroup: snapshot.storage.k8s.io  # API group (for VolumeSnapshot)
+  dataSourceRef:                    # Data source reference (optional, Kubernetes 1.22+)
+                                    # Similar to dataSource but with namespace support
+    name: snapshot-name            # Name of VolumeSnapshot or PVC
+    kind: VolumeSnapshot            # Kind: VolumeSnapshot or PersistentVolumeClaim
+    apiGroup: snapshot.storage.k8s.io  # API group (for VolumeSnapshot)
+    namespace: default             # Namespace (optional, defaults to PVC namespace)
+
+---
+# Example: PVC for dynamic provisioning
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: dynamic-pvc
+  namespace: default
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi                # Request 50Gi of storage
+  storageClassName: fast-ssd       # Storage class triggers dynamic provisioning
+                                    # A PV will be automatically created and bound
+
+---
+# Example: PVC without storage class (binds to unbound PVs)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: static-pvc
+  namespace: default
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: ""             # Empty string means no storage class
+                                    # Will only bind to PVs without storageClassName
+
+---
+# Example: PVC with volume mode Block
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: block-pvc
+  namespace: default
+spec:
+  accessModes:
+  - ReadWriteOnce
+  volumeMode: Block                # Block volume mode (raw block device)
+  resources:
+    requests:
+      storage: 100Gi
+  storageClassName: fast-ssd
+
+---
+# Example: PVC from snapshot
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-from-snapshot
+  namespace: default
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi                # Can be same or larger than snapshot size
+  storageClassName: fast-ssd
+  dataSource:                      # Data source from snapshot
+    name: my-snapshot              # VolumeSnapshot name
+    kind: VolumeSnapshot           # Kind: VolumeSnapshot
+    apiGroup: snapshot.storage.k8s.io  # API group
+
+---
+# Example: PVC clone (from another PVC)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-clone
+  namespace: default
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi                # Must match or be larger than source PVC
+  storageClassName: fast-ssd
+  dataSource:                      # Data source from PVC
+    name: source-pvc               # Source PVC name
+    kind: PersistentVolumeClaim    # Kind: PersistentVolumeClaim
+    apiGroup: ""                   # Empty API group for core resources
+
+---
+# Example: PVC with selector (binds to specific PV)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: selective-pvc
+  namespace: default
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  selector:                        # Label selector for PV
+    matchLabels:                   # Match PVs with these labels
+      type: ssd                   # PV must have label type=ssd
+      zone: us-west-1a            # PV must have label zone=us-west-1a
+  storageClassName: ""             # No storage class (static binding)
+

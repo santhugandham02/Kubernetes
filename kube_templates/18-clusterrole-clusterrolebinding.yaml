@@ -1,0 +1,189 @@
+apiVersion: rbac.authorization.k8s.io/v1  # API version for ClusterRole resource (rbac.authorization.k8s.io/v1 is the stable version)
+kind: ClusterRole                          # Resource type - ClusterRole defines permissions cluster-wide
+metadata:                                   # Metadata section - contains identifying information
+  name: cluster-admin                      # Name of the ClusterRole (must be unique cluster-wide)
+  labels:                                  # Labels are key-value pairs used for selecting and organizing resources
+    rbac: cluster-admin                    # Label: RBAC resource type
+  annotations:                             # Annotations are metadata that don't affect resource behavior
+    description: "Cluster admin role"      # Custom annotation: human-readable description
+    # Note: ClusterRole is cluster-scoped, so no namespace field
+rules:                                     # List of policy rules (required)
+- apiGroups:                               # API groups this rule applies to
+  - "*"                                    # "*" means all API groups
+  resources:                               # Resources this rule applies to
+  - "*"                                    # "*" means all resources
+  verbs:                                   # Verbs (actions) allowed on resources
+  - "*"                                    # "*" means all verbs (full access)
+- apiGroups:                               # Rule for non-resource URLs
+  - ""                                     # Core API group
+  nonResourceURLs:                         # Non-resource URLs
+  - "*"                                    # "*" means all non-resource URLs
+  verbs:                                   # Verbs
+  - "*"                                    # "*" means all verbs
+
+---
+# Example: ClusterRole for viewing all resources
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cluster-viewer
+rules:
+- apiGroups:
+  - "*"
+  resources:
+  - "*"
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  nonResourceURLs:
+  - /api
+  - /api/v1
+  verbs:
+  - get
+  - list
+
+---
+# Example: ClusterRole for managing nodes
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: node-manager
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - nodes
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - ""
+  resources:
+  - nodes/status
+  verbs:
+  - get
+  - update
+  - patch
+
+---
+# Example: ClusterRole for managing PersistentVolumes
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: pv-manager
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - persistentvolumes
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - ""
+  resources:
+  - persistentvolumeclaims
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+
+---
+# Example: ClusterRole for managing StorageClasses
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: storageclass-manager
+rules:
+- apiGroups:
+  - storage.k8s.io
+  resources:
+  - storageclasses
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+
+---
+# Example: ClusterRoleBinding - binds ClusterRole to subjects cluster-wide
+apiVersion: rbac.authorization.k8s.io/v1  # API version for ClusterRoleBinding resource
+kind: ClusterRoleBinding                  # Resource type - ClusterRoleBinding grants ClusterRole permissions to subjects
+metadata:                                 # Metadata section - contains identifying information
+  name: cluster-admin-binding            # Name of the ClusterRoleBinding (must be unique cluster-wide)
+  labels:                                # Labels are key-value pairs used for selecting and organizing resources
+    rbac: cluster-admin-binding          # Label: RBAC resource type
+  annotations:                           # Annotations are metadata that don't affect resource behavior
+    description: "Binding cluster-admin role to service account"  # Custom annotation
+  # Note: ClusterRoleBinding is cluster-scoped, so no namespace field
+roleRef:                                 # Reference to ClusterRole (required)
+  apiGroup: rbac.authorization.k8s.io   # API group of the role
+  kind: ClusterRole                     # Kind: ClusterRole (must be ClusterRole, not Role)
+  name: cluster-admin                   # Name of the ClusterRole
+subjects:                                # List of subjects to grant permissions to (required)
+- kind: ServiceAccount                   # Subject kind: ServiceAccount, User, or Group
+  name: admin-serviceaccount            # Subject name
+  namespace: kube-system                # Namespace (required for ServiceAccount)
+- kind: User                             # Another subject: User
+  name: admin@example.com               # User name
+  apiGroup: rbac.authorization.k8s.io   # API group
+- kind: Group                            # Another subject: Group
+  name: cluster-admins                  # Group name
+  apiGroup: rbac.authorization.k8s.io   # API group
+
+---
+# Example: ClusterRoleBinding for ServiceAccount
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: node-manager-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: node-manager
+subjects:
+- kind: ServiceAccount
+  name: node-manager-sa
+  namespace: kube-system
+
+---
+# Example: ClusterRoleBinding for multiple users
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: cluster-viewer-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-viewer
+subjects:
+- kind: User
+  name: alice@example.com
+  apiGroup: rbac.authorization.k8s.io
+- kind: User
+  name: bob@example.com
+  apiGroup: rbac.authorization.k8s.io
+- kind: Group
+  name: developers
+  apiGroup: rbac.authorization.k8s.io
+

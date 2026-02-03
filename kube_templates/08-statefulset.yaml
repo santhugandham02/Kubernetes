@@ -1,0 +1,146 @@
+apiVersion: apps/v1                  # API version for StatefulSet resource (apps/v1 is the stable version)
+kind: StatefulSet                    # Resource type - StatefulSet manages stateful applications with stable network identities
+metadata:                            # Metadata section - contains identifying information
+  name: mysql-statefulset           # Name of the StatefulSet (must be unique within namespace)
+  namespace: default                # Namespace where StatefulSet will be created (optional, defaults to 'default')
+  labels:                           # Labels are key-value pairs used for selecting and organizing resources
+    app: mysql                      # Label: application name
+    version: v1                     # Label: version identifier
+  annotations:                      # Annotations are metadata that don't affect resource behavior
+    description: "MySQL StatefulSet"  # Custom annotation: human-readable description
+spec:                                # Specification section - defines desired state
+  serviceName: mysql-headless        # Name of headless service that governs the StatefulSet (required)
+  replicas: 3                       # Number of pod replicas to maintain (default: 1)
+  podManagementPolicy: OrderedReady # Pod management policy: OrderedReady (default) or Parallel
+                                    # OrderedReady: pods created/terminated one at a time in order
+                                    # Parallel: pods created/terminated in parallel
+  updateStrategy:                   # Update strategy for StatefulSet
+    type: RollingUpdate             # Update type: RollingUpdate (default) or OnDelete
+    rollingUpdate:                  # Configuration for rolling update strategy
+      partition: 0                  # Partition for canary updates (pods with ordinal >= partition are updated)
+                                    # Example: partition=2 means pods 0,1 keep old version, pods 2+ get new version
+  revisionHistoryLimit: 10          # Number of ControllerRevisions to retain (default: 10)
+  minReadySeconds: 0                # Minimum seconds a pod must be ready before considered available (default: 0)
+  persistentVolumeClaimRetentionPolicy:  # PVC retention policy (Kubernetes 1.23+)
+    whenDeleted: Retain             # What to do with PVCs when StatefulSet is deleted: Retain or Delete
+    whenScaled: Retain              # What to do with PVCs when StatefulSet is scaled down: Retain or Delete
+  selector:                         # Label selector - pods matching these labels are managed by this StatefulSet
+    matchLabels:                    # Match pods with exact label matches
+      app: mysql                    # Pods must have label app=mysql
+  template:                         # Pod template - defines how pods should be created
+    metadata:                       # Metadata for pods created from this template
+      labels:                       # Labels applied to pods (must match selector)
+        app: mysql                  # Must match selector.matchLabels
+        version: v1                 # Version label
+      annotations:                  # Annotations for pods
+        prometheus.io/scrape: "true"  # Example: Prometheus scraping annotation
+    spec:                           # Pod specification
+      containers:                   # List of containers to run in the pod
+      - name: mysql                 # Container name (must be unique within pod)
+        image: mysql:8.0            # Container image (Docker image name and tag)
+        imagePullPolicy: IfNotPresent  # When to pull image: Always, Never, IfNotPresent
+        ports:                      # Container ports to expose
+        - name: mysql               # Port name
+          containerPort: 3306       # Port number inside container
+          protocol: TCP            # Protocol: TCP, UDP, or SCTP
+        env:                        # Environment variables for the container
+        - name: MYSQL_ROOT_PASSWORD  # MySQL root password environment variable
+          valueFrom:                # Get value from Secret
+            secretKeyRef:           # Reference to Secret
+              name: mysql-secret    # Secret name
+              key: root-password    # Key in Secret
+        - name: MYSQL_DATABASE      # MySQL database name
+          value: "mydb"             # Literal value
+        volumeMounts:               # Mount volumes into container filesystem
+        - name: mysql-data          # Volume name (must match volumeClaimTemplates.name)
+          mountPath: /var/lib/mysql  # Path inside container where volume is mounted
+        resources:                  # Resource requests and limits
+          requests:                 # Minimum resources required
+            cpu: "500m"            # CPU request
+            memory: "1Gi"          # Memory request
+          limits:                   # Maximum resources allowed
+            cpu: "2"               # CPU limit
+            memory: "4Gi"          # Memory limit
+        livenessProbe:             # Probe to check if container is alive
+          exec:                    # Exec probe
+            command:                # Command to execute
+            - mysqladmin
+            - ping
+            - -h
+            - localhost
+          initialDelaySeconds: 30  # Seconds to wait before first probe
+          periodSeconds: 10        # Seconds between probes
+          timeoutSeconds: 5        # Seconds before probe times out
+          successThreshold: 1      # Consecutive successes needed
+          failureThreshold: 3      # Consecutive failures needed
+        readinessProbe:            # Probe to check if container is ready
+          exec:                    # Exec probe
+            command:                # Command to execute
+            - mysqladmin
+            - ping
+            - -h
+            - localhost
+          initialDelaySeconds: 5   # Seconds to wait before first probe
+          periodSeconds: 5         # Seconds between probes
+          timeoutSeconds: 3        # Seconds before probe times out
+        securityContext:           # Security settings for container
+          runAsNonRoot: true       # Container must run as non-root user
+          runAsUser: 999          # UID to run container as (MySQL user)
+          allowPrivilegeEscalation: false  # Prevent privilege escalation
+          capabilities:            # Linux capabilities
+            drop:                  # Capabilities to drop
+            - ALL                  # Drop all capabilities
+      initContainers:              # Init containers run before main containers (optional)
+      - name: init-mysql           # Init container name
+        image: busybox:1.35        # Init container image
+        command:                   # Command to run
+        - sh
+        - -c
+        - |
+          # Initialize MySQL data directory if needed
+          if [ ! -d /var/lib/mysql/mysql ]; then
+            echo "Initializing MySQL data directory"
+          fi
+        volumeMounts:              # Volume mounts
+        - name: mysql-data
+          mountPath: /var/lib/mysql
+      restartPolicy: Always         # Pod restart policy: Always, OnFailure, Never (default: Always)
+      terminationGracePeriodSeconds: 30  # Seconds to wait for graceful shutdown (default: 30)
+      dnsPolicy: ClusterFirst       # DNS policy: ClusterFirst, ClusterFirstWithHostNet, Default, None
+      hostname: mysql               # Pod hostname (optional, defaults to pod name)
+      subdomain: mysql              # Pod subdomain (optional, used with headless service)
+      nodeSelector:                 # Node selection constraints (optional)
+        disktype: ssd              # Node must have label disktype=ssd
+      affinity:                     # Advanced scheduling constraints (optional)
+        podAntiAffinity:           # Pod anti-affinity rules (spread pods apart)
+          preferredDuringSchedulingIgnoredDuringExecution:  # Soft preference
+          - weight: 100            # Weight (1-100) for preference
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app: mysql
+              topologyKey: kubernetes.io/hostname  # Spread across different nodes
+      tolerations:                  # Tolerations for tainted nodes (optional)
+      - key: "key1"                # Taint key
+        operator: Equal            # Operator: Equal or Exists
+        value: "value1"           # Taint value (required if operator is Equal)
+        effect: NoSchedule        # Taint effect: NoSchedule, PreferNoSchedule, NoExecute
+  volumeClaimTemplates:            # PersistentVolumeClaim templates (creates PVC for each pod)
+  - metadata:                      # Metadata for PVC
+      name: mysql-data             # PVC name (referenced in volumeMounts.name)
+    spec:                          # PVC specification
+      accessModes:                 # Access modes: ReadWriteOnce, ReadOnlyMany, ReadWriteMany
+      - ReadWriteOnce              # Single node read-write access
+      storageClassName: fast-ssd  # Storage class name (optional, uses default if omitted)
+      resources:                   # Resource requests
+        requests:                  # Storage request
+          storage: 20Gi           # Storage size (20 gibibytes)
+      volumeMode: Filesystem       # Volume mode: Filesystem (default) or Block
+      selector:                    # Label selector for PV (optional)
+        matchLabels:              # Match PVs with these labels
+          type: ssd               # PV must have label type=ssd
+      dataSource:                  # Data source for volume (optional, Kubernetes 1.18+)
+        name: mysql-snapshot      # Name of VolumeSnapshot
+        kind: VolumeSnapshot      # Kind: VolumeSnapshot
+        apiGroup: snapshot.storage.k8s.io  # API group for VolumeSnapshot
+

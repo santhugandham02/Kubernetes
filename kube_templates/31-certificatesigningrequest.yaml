@@ -1,0 +1,154 @@
+apiVersion: certificates.k8s.io/v1   # API version for CertificateSigningRequest resource (certificates.k8s.io/v1 is the stable version)
+kind: CertificateSigningRequest      # Resource type - CSR requests a certificate from the cluster
+metadata:                            # Metadata section - contains identifying information
+  name: my-csr                      # Name of the CSR (must be unique cluster-wide)
+  labels:                           # Labels are key-value pairs used for selecting and organizing resources
+    csr: user                        # Label: CSR type
+  annotations:                      # Annotations are metadata that don't affect resource behavior
+    description: "User certificate request"  # Custom annotation: human-readable description
+  # Note: CSR is cluster-scoped, so no namespace field
+spec:                                # Specification section - defines desired state
+  request: LS0tLS1CRUdJTi...        # Certificate request (required) - base64-encoded PEM-encoded PKCS#10
+                                    # Generate with: openssl req -new -key key.pem -out csr.pem
+                                    # Then base64 encode: cat csr.pem | base64 -w 0
+  signerName: kubernetes.io/kube-apiserver-client  # Signer name (required)
+                                    # Common signers:
+                                    # - kubernetes.io/kube-apiserver-client (for client certificates)
+                                    # - kubernetes.io/kube-apiserver-client-kubelet (for kubelet client certificates)
+                                    # - kubernetes.io/kubelet-serving (for kubelet serving certificates)
+                                    # - kubernetes.io/legacy-unknown (for legacy unknown signers)
+  expirationSeconds: 86400          # Expiration in seconds (optional, Kubernetes 1.22+)
+                                    # 86400 = 24 hours
+                                    # If omitted, uses signer's default expiration
+  usages:                            # Key usages (required)
+  - digital signature               # Digital signature usage
+  - key encipherment                # Key encipherment usage
+  - server auth                     # Server authentication usage
+  - client auth                     # Client authentication usage
+  # Other possible usages:
+  # - code signing
+  # - email protection
+  # - ipsec end system
+  # - ipsec tunnel
+  # - ipsec user
+  # - timestamping
+  # - ocsp signing
+  # - any
+  username: system:serviceaccount:default:my-sa  # Username (optional) - for authorization
+  groups:                           # Groups (optional) - for authorization
+  - system:serviceaccounts
+  - system:serviceaccounts:default
+  - system:authenticated
+  extra:                            # Extra information (optional) - for authorization
+    pod-name:                       # Custom key
+    - my-pod                        # Custom value
+    pod-namespace:
+    - default
+
+---
+# Example: CSR for client certificate
+apiVersion: certificates.k8s.io/v1
+kind: CertificateSigningRequest
+metadata:
+  name: client-csr
+spec:
+  request: LS0tLS1CRUdJTi...        # Base64-encoded certificate request
+  signerName: kubernetes.io/kube-apiserver-client
+  expirationSeconds: 31536000       # 1 year expiration
+  usages:
+  - digital signature
+  - key encipherment
+  - client auth
+  username: alice
+  groups:
+  - developers
+  - system:authenticated
+
+---
+# Example: CSR for kubelet client certificate
+apiVersion: certificates.k8s.io/v1
+kind: CertificateSigningRequest
+metadata:
+  name: kubelet-client-csr
+spec:
+  request: LS0tLS1CRUdJTi...
+  signerName: kubernetes.io/kube-apiserver-client-kubelet
+  expirationSeconds: 86400          # 24 hours
+  usages:
+  - digital signature
+  - key encipherment
+  - client auth
+  username: system:node:node-1
+  groups:
+  - system:nodes
+  - system:authenticated
+
+---
+# Example: CSR for kubelet serving certificate
+apiVersion: certificates.k8s.io/v1
+kind: CertificateSigningRequest
+metadata:
+  name: kubelet-serving-csr
+spec:
+  request: LS0tLS1CRUdJTi...
+  signerName: kubernetes.io/kubelet-serving
+  expirationSeconds: 86400
+  usages:
+  - digital signature
+  - key encipherment
+  - server auth
+  username: system:node:node-1
+  groups:
+  - system:nodes
+
+---
+# Example: CSR for service account
+apiVersion: certificates.k8s.io/v1
+kind: CertificateSigningRequest
+metadata:
+  name: sa-csr
+spec:
+  request: LS0tLS1CRUdJTi...
+  signerName: kubernetes.io/kube-apiserver-client
+  expirationSeconds: 86400
+  usages:
+  - digital signature
+  - key encipherment
+  - client auth
+  username: system:serviceaccount:default:my-sa
+  groups:
+  - system:serviceaccounts
+  - system:serviceaccounts:default
+  - system:authenticated
+
+---
+# Example: CSR with custom expiration
+apiVersion: certificates.k8s.io/v1
+kind: CertificateSigningRequest
+metadata:
+  name: long-lived-csr
+spec:
+  request: LS0tLS1CRUdJTi...
+  signerName: kubernetes.io/kube-apiserver-client
+  expirationSeconds: 630720000      # 20 years (maximum allowed)
+  usages:
+  - digital signature
+  - key encipherment
+  - client auth
+  username: admin
+  groups:
+  - system:masters
+  - system:authenticated
+
+---
+# Example: CSR status (auto-populated by Kubernetes)
+# Note: Status is set by the API server, not in the spec
+# After approval, status will contain:
+# status:
+#   conditions:
+#   - type: Approved
+#     status: "True"
+#     reason: "KubectlApprove"
+#     message: "This CSR was approved by kubectl certificate approve"
+#   certificate: LS0tLS1CRUdJTi...  # Base64-encoded signed certificate
+

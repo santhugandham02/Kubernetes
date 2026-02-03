@@ -1,0 +1,88 @@
+apiVersion: coordination.k8s.io/v1  # API version for Lease resource (coordination.k8s.io/v1 is the stable version)
+kind: Lease                           # Resource type - Lease provides distributed lock/leader election mechanism
+metadata:                             # Metadata section - contains identifying information
+  name: my-lease                     # Name of the Lease (must be unique within namespace)
+  namespace: default                 # Namespace where Lease will be created (optional, defaults to 'default')
+  labels:                            # Labels are key-value pairs used for selecting and organizing resources
+    lease: leader-election           # Label: lease type
+  annotations:                       # Annotations are metadata that don't affect resource behavior
+    description: "Leader election lease"  # Custom annotation: human-readable description
+spec:                                 # Specification section - defines desired state
+  holderIdentity: pod-1              # Holder identity (optional) - identifies the current holder
+                                    # Typically pod name or node name
+  leaseDurationSeconds: 15          # Lease duration in seconds (optional, default: 15)
+                                    # How long the lease is valid
+  acquireTime: "2023-01-01T00:00:00Z"  # Acquire time (optional) - when lease was acquired
+                                    # Format: RFC3339 timestamp
+  renewTime: "2023-01-01T00:00:15Z"  # Renew time (optional) - when lease was last renewed
+                                    # Format: RFC3339 timestamp
+  leaseTransitions: 0                # Lease transitions (optional) - number of times lease changed hands
+                                    # Incremented each time holderIdentity changes
+
+---
+# Example: Lease for leader election
+apiVersion: coordination.k8s.io/v1
+kind: Lease
+metadata:
+  name: controller-leader-election
+  namespace: kube-system
+spec:
+  holderIdentity: controller-pod-1
+  leaseDurationSeconds: 15
+  acquireTime: "2023-01-01T00:00:00Z"
+  renewTime: "2023-01-01T00:00:15Z"
+  leaseTransitions: 0
+
+---
+# Example: Lease with longer duration
+apiVersion: coordination.k8s.io/v1
+kind: Lease
+metadata:
+  name: long-lease
+  namespace: default
+spec:
+  holderIdentity: node-1
+  leaseDurationSeconds: 60          # 60 seconds duration
+  acquireTime: "2023-01-01T00:00:00Z"
+  renewTime: "2023-01-01T00:00:30Z"
+  leaseTransitions: 2                # Lease has changed hands 2 times
+
+---
+# Example: Lease for node heartbeat (used by kubelet)
+apiVersion: coordination.k8s.io/v1
+kind: Lease
+metadata:
+  name: node-lease-node-1
+  namespace: kube-node-lease         # kube-node-lease namespace (for node leases)
+spec:
+  holderIdentity: node-1
+  leaseDurationSeconds: 40
+  acquireTime: "2023-01-01T00:00:00Z"
+  renewTime: "2023-01-01T00:00:10Z"
+  leaseTransitions: 0
+
+---
+# Example: Lease with minimal fields
+apiVersion: coordination.k8s.io/v1
+kind: Lease
+metadata:
+  name: simple-lease
+  namespace: default
+spec:
+  holderIdentity: pod-1
+  leaseDurationSeconds: 15
+
+---
+# Example: Lease for distributed lock
+apiVersion: coordination.k8s.io/v1
+kind: Lease
+metadata:
+  name: distributed-lock
+  namespace: default
+spec:
+  holderIdentity: worker-pod-1
+  leaseDurationSeconds: 30
+  acquireTime: "2023-01-01T00:00:00Z"
+  renewTime: "2023-01-01T00:00:25Z"
+  leaseTransitions: 5                # Lock has changed hands 5 times
+

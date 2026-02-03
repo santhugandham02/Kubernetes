@@ -1,0 +1,79 @@
+apiVersion: apps/v1                  # API version for ReplicaSet resource (apps/v1 is the stable version)
+kind: ReplicaSet                     # Resource type - ReplicaSet ensures a specified number of pod replicas are running
+metadata:                            # Metadata section - contains identifying information
+  name: nginx-replicaset            # Name of the ReplicaSet (must be unique within namespace)
+  namespace: default                # Namespace where ReplicaSet will be created (optional, defaults to 'default')
+  labels:                           # Labels are key-value pairs used for selecting and organizing resources
+    app: nginx                      # Label: application name
+    version: v1                     # Label: version identifier
+  annotations:                      # Annotations are metadata that don't affect resource behavior
+    description: "Nginx ReplicaSet"  # Custom annotation: human-readable description
+spec:                                # Specification section - defines desired state
+  replicas: 3                       # Number of pod replicas to maintain (default: 1)
+  minReadySeconds: 0                # Minimum seconds a pod must be ready before considered available (default: 0)
+  selector:                          # Label selector - pods matching these labels are managed by this ReplicaSet
+    matchLabels:                    # Match pods with exact label matches
+      app: nginx                    # Pods must have label app=nginx
+    matchExpressions:               # Advanced selector using expressions (optional)
+    - key: version                  # Label key to match
+      operator: In                  # Operator: In, NotIn, Exists, DoesNotExist
+      values:                       # Values for In/NotIn operators
+      - v1
+      - v2
+  template:                         # Pod template - defines how pods should be created
+    metadata:                       # Metadata for pods created from this template
+      labels:                       # Labels applied to pods (must match selector)
+        app: nginx                  # Must match selector.matchLabels
+        version: v1                  # Version label
+      annotations:                  # Annotations for pods
+        prometheus.io/scrape: "true"  # Example: Prometheus scraping annotation
+    spec:                           # Pod specification
+      containers:                   # List of containers to run in the pod
+      - name: nginx                 # Container name (must be unique within pod)
+        image: nginx:1.21.6        # Container image (Docker image name and tag)
+        imagePullPolicy: IfNotPresent  # When to pull image: Always, Never, IfNotPresent
+        ports:                      # Container ports to expose
+        - name: http                # Port name
+          containerPort: 80        # Port number inside container
+          protocol: TCP            # Protocol: TCP, UDP, or SCTP
+        resources:                  # Resource requests and limits
+          requests:                 # Minimum resources required
+            cpu: "100m"            # CPU request (100m = 0.1 CPU cores)
+            memory: "128Mi"        # Memory request (128Mi = 128 mebibytes)
+          limits:                   # Maximum resources allowed
+            cpu: "500m"            # CPU limit
+            memory: "512Mi"        # Memory limit
+        livenessProbe:             # Probe to check if container is alive
+          httpGet:                  # HTTP GET probe
+            path: /health          # HTTP path to check
+            port: 80               # Port to check
+          initialDelaySeconds: 30  # Seconds to wait before first probe
+          periodSeconds: 10        # Seconds between probes
+          timeoutSeconds: 5        # Seconds before probe times out
+          successThreshold: 1      # Consecutive successes needed
+          failureThreshold: 3      # Consecutive failures needed
+        readinessProbe:            # Probe to check if container is ready
+          httpGet:                  # HTTP GET probe
+            path: /ready           # HTTP path to check
+            port: 80               # Port to check
+          initialDelaySeconds: 5   # Seconds to wait before first probe
+          periodSeconds: 5         # Seconds between probes
+          timeoutSeconds: 3        # Seconds before probe times out
+        securityContext:           # Security settings for container
+          runAsNonRoot: true       # Container must run as non-root user
+          runAsUser: 1000         # UID to run container as
+          allowPrivilegeEscalation: false  # Prevent privilege escalation
+          capabilities:            # Linux capabilities
+            drop:                  # Capabilities to drop
+            - ALL                  # Drop all capabilities
+      restartPolicy: Always         # Pod restart policy: Always, OnFailure, Never (default: Always)
+      terminationGracePeriodSeconds: 30  # Seconds to wait for graceful shutdown (default: 30)
+      dnsPolicy: ClusterFirst       # DNS policy: ClusterFirst, ClusterFirstWithHostNet, Default, None
+      nodeSelector:                 # Node selection constraints (optional)
+        disktype: ssd              # Node must have label disktype=ssd
+      tolerations:                  # Tolerations for tainted nodes (optional)
+      - key: "key1"                # Taint key
+        operator: Equal            # Operator: Equal or Exists
+        value: "value1"           # Taint value (required if operator is Equal)
+        effect: NoSchedule        # Taint effect: NoSchedule, PreferNoSchedule, NoExecute
+

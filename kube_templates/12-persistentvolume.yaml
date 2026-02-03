@@ -1,0 +1,197 @@
+apiVersion: v1                      # API version for PersistentVolume resource (v1 is the stable version)
+kind: PersistentVolume              # Resource type - PersistentVolume is cluster-wide storage resource
+metadata:                           # Metadata section - contains identifying information
+  name: pv-example                 # Name of the PersistentVolume (must be unique cluster-wide)
+  labels:                          # Labels are key-value pairs used for selecting and organizing resources
+    type: local                    # Label: storage type
+    zone: us-west-1a               # Label: availability zone
+  annotations:                     # Annotations are metadata that don't affect resource behavior
+    description: "Example PersistentVolume"  # Custom annotation: human-readable description
+    pv.kubernetes.io/provisioned-by: manual  # Annotation: how PV was provisioned
+spec:                               # Specification section - defines desired state
+  capacity:                        # Storage capacity
+    storage: 10Gi                  # Storage size (10 gibibytes)
+                                    # Can use: Gi (gibibytes), Mi (mebibytes), Ti (tebibytes)
+  volumeMode: Filesystem           # Volume mode: Filesystem (default) or Block
+                                    # Filesystem: mounted as filesystem
+                                    # Block: exposed as raw block device
+  accessModes:                     # Access modes - how volume can be mounted
+  - ReadWriteOnce                  # Single node read-write access (RWO)
+                                    # Most common, works with most storage types
+  - ReadOnlyMany                   # Multiple nodes read-only access (ROX)
+                                    # Less common, used for read-only shared data
+  - ReadWriteMany                  # Multiple nodes read-write access (RWX)
+                                    # Requires storage that supports concurrent access (NFS, CephFS, etc.)
+  persistentVolumeReclaimPolicy: Retain  # Reclaim policy: Retain or Delete
+                                    # Retain: keep volume and data after PVC deletion (manual cleanup)
+                                    # Delete: delete volume and data after PVC deletion (cloud storage)
+                                    # Note: Recycle policy is DEPRECATED and removed in Kubernetes 1.15+
+  storageClassName: fast-ssd       # Storage class name (optional)
+                                    # Used for dynamic provisioning and PVC matching
+                                    # If omitted, only PVCs without storageClassName can bind
+  mountOptions:                     # Mount options for filesystem (optional)
+  - nfsvers=4.1                    # NFS version (for NFS volumes)
+  - hard                           # Hard mount (for NFS volumes)
+  - rsize=1048576                  # Read size (for NFS volumes)
+  - wsize=1048576                  # Write size (for NFS volumes)
+  - timeo=600                      # Timeout (for NFS volumes)
+  nodeAffinity:                    # Node affinity for volume (optional)
+                                    # Restricts which nodes can use this volume
+    required:                      # Required node selector
+      nodeSelectorTerms:           # List of node selector terms (OR logic)
+      - matchExpressions:          # Match expressions (AND logic)
+        - key: kubernetes.io/hostname  # Node label key
+          operator: In             # Operator: In, NotIn, Exists, DoesNotExist
+          values:                  # Values for In/NotIn operators
+          - node1                 # Node hostname
+          - node2                 # Another node hostname
+  # Volume source - one of the following must be specified:
+  
+  # Example 1: HostPath volume (local node storage)
+  hostPath:                        # Host path volume source
+    path: /mnt/data                # Path on host node
+    type: DirectoryOrCreate        # Type: DirectoryOrCreate, Directory, FileOrCreate, File, Socket, CharDevice, BlockDevice
+                                    # DirectoryOrCreate: create directory if it doesn't exist
+                                    # Directory: directory must exist
+                                    # FileOrCreate: create file if it doesn't exist
+                                    # File: file must exist
+                                    # Socket: socket must exist
+                                    # CharDevice: character device must exist
+                                    # BlockDevice: block device must exist
+  
+  # Example 2: NFS volume (uncomment to use)
+  # nfs:                            # NFS volume source
+  #   server: nfs-server.example.com  # NFS server hostname or IP
+  #   path: /exports/data            # NFS export path
+  #   readOnly: false               # Mount as read-only (default: false)
+  
+  # Example 3: iSCSI volume (uncomment to use)
+  # iscsi:                          # iSCSI volume source
+  #   targetPortal: 192.168.1.100:3260  # iSCSI target portal (IP:port)
+  #   iqn: iqn.2001-04.com.example:storage.k8s.sys1.xyz  # iSCSI qualified name
+  #   lun: 0                        # Logical unit number
+  #   fsType: ext4                  # Filesystem type (optional, default: ext4)
+  #   readOnly: false               # Mount as read-only (default: false)
+  #   chapAuthDiscovery: false      # Enable CHAP authentication for discovery (default: false)
+  #   chapAuthSession: false        # Enable CHAP authentication for session (default: false)
+  #   secretRef:                    # Secret for CHAP authentication (optional)
+  #     name: iscsi-secret          # Secret name
+  #   initiatorName: "iqn.1993-08.org.debian:01:abc123"  # Initiator name (optional)
+  
+  # Example 4: CephFS volume (uncomment to use)
+  # cephfs:                         # CephFS volume source
+  #   monitors:                     # List of Ceph monitors
+  #   - 192.168.1.100:6789         # Monitor 1 (IP:port)
+  #   - 192.168.1.101:6789         # Monitor 2 (IP:port)
+  #   path: /data                   # CephFS path (optional, default: /)
+  #   user: admin                   # Ceph user (optional, default: admin)
+  #   secretFile: /etc/ceph/user.secret  # Secret file path (optional)
+  #   secretRef:                    # Secret reference (optional)
+  #     name: ceph-secret           # Secret name
+  #   readOnly: false               # Mount as read-only (default: false)
+  
+  # Example 5: GlusterFS volume (uncomment to use)
+  # glusterfs:                      # GlusterFS volume source
+  #   endpoints: glusterfs-cluster  # Endpoints name (service that provides GlusterFS pods)
+  #   path: myvol                   # GlusterFS volume name
+  #   readOnly: false               # Mount as read-only (default: false)
+  
+  # Example 6: RBD (Ceph RBD) volume (uncomment to use)
+  # rbd:                            # RBD volume source
+  #   monitors:                     # List of Ceph monitors
+  #   - 192.168.1.100:6789         # Monitor 1 (IP:port)
+  #   - 192.168.1.101:6789         # Monitor 2 (IP:port)
+  #   pool: rbd                     # RBD pool name
+  #   image: foo                    # RBD image name
+  #   fsType: ext4                  # Filesystem type (optional, default: ext4)
+  #   readOnly: false               # Mount as read-only (default: false)
+  #   user: admin                   # Ceph user (optional, default: admin)
+  #   keyring: /etc/ceph/keyring    # Keyring file path (optional)
+  #   secretRef:                    # Secret reference (optional)
+  #     name: ceph-secret           # Secret name
+  #   imageFormat: "2"              # Image format: "1" or "2" (optional, default: "2")
+  #   imageFeatures: "layering"     # Image features (optional, for format 2)
+  
+  # Example 7: Quobyte volume (uncomment to use)
+  # quobyte:                        # Quobyte volume source
+  #   registry: registry.example.com:7861  # Quobyte registry (hostname:port)
+  #   volume: "vol1"                # Quobyte volume name
+  #   readOnly: false               # Mount as read-only (default: false)
+  #   user: root                    # User (optional, default: root)
+  #   group: root                   # Group (optional, default: root)
+  
+  # Example 8: Azure Disk volume (uncomment to use)
+  # azureDisk:                      # Azure Disk volume source
+  #   diskName: my-disk             # Azure disk name
+  #   diskURI: /subscriptions/.../resourceGroups/.../providers/Microsoft.Compute/disks/my-disk  # Disk URI
+  #   cachingMode: ReadWrite        # Caching mode: None, ReadOnly, ReadWrite (optional)
+  #   fsType: ext4                  # Filesystem type (optional, default: ext4)
+  #   readOnly: false               # Mount as read-only (default: false)
+  #   kind: Managed                 # Kind: Managed or Shared (optional, default: Shared)
+  
+  # Example 9: Azure File volume (uncomment to use)
+  # azureFile:                      # Azure File volume source
+  #   secretName: azure-secret      # Secret containing Azure storage account name and key
+  #   shareName: myshare            # Azure file share name
+  #   readOnly: false               # Mount as read-only (default: false)
+  
+  # Example 10: AWS EBS volume (uncomment to use)
+  # awsElasticBlockStore:           # AWS EBS volume source
+  #   volumeID: vol-12345678        # EBS volume ID
+  #   fsType: ext4                  # Filesystem type (optional, default: ext4)
+  #   readOnly: false               # Mount as read-only (default: false)
+  #   partition: 1                  # Partition number (optional, default: entire volume)
+  
+  # Example 11: GCE Persistent Disk volume (uncomment to use)
+  # gcePersistentDisk:              # GCE Persistent Disk volume source
+  #   pdName: my-disk               # GCE persistent disk name
+  #   fsType: ext4                  # Filesystem type (optional, default: ext4)
+  #   readOnly: false               # Mount as read-only (default: false)
+  #   partition: 1                  # Partition number (optional, default: entire volume)
+  
+  # Example 12: VsphereVolume volume (uncomment to use)
+  # vsphereVolume:                  # VsphereVolume volume source
+  #   volumePath: "[datastore1] volumes/myvolume"  # Path to vSphere volume
+  #   fsType: ext4                  # Filesystem type (optional, default: ext4)
+  #   storagePolicyName: "policy1"  # Storage policy name (optional)
+  
+  # Example 13: Portworx volume (uncomment to use)
+  # portworxVolume:                 # Portworx volume source
+  #   volumeID: "px-vol-123"       # Portworx volume ID
+  #   fsType: ext4                  # Filesystem type (optional, default: ext4)
+  #   readOnly: false               # Mount as read-only (default: false)
+  
+  # Example 14: ScaleIO volume (uncomment to use)
+  # scaleIO:                        # ScaleIO volume source
+  #   gateway: https://gateway.example.com:443/api  # ScaleIO gateway
+  #   system: scaleio               # ScaleIO system name
+  #   secretRef:                    # Secret reference
+  #     name: scaleio-secret         # Secret name
+  #   sslEnabled: false             # Enable SSL (default: false)
+  #   protectionDomain: pd1         # Protection domain (optional)
+  #   storagePool: sp1              # Storage pool (optional)
+  #   storageMode: ThinProvisioned  # Storage mode: ThinProvisioned or ThickProvisioned (optional)
+  #   volumeName: vol1              # Volume name
+  #   fsType: xfs                   # Filesystem type (optional, default: xfs)
+  #   readOnly: false               # Mount as read-only (default: false)
+
+---
+# Example: PV with claimRef (bound to specific PVC)
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-bound
+spec:
+  capacity:
+    storage: 20Gi
+  accessModes:
+  - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: fast-ssd
+  claimRef:                         # Claim reference (binds PV to specific PVC)
+    name: my-pvc                    # PVC name
+    namespace: default              # PVC namespace
+  hostPath:
+    path: /mnt/data
+    type: DirectoryOrCreate
+

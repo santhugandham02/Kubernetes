@@ -1,0 +1,245 @@
+apiVersion: networking.k8s.io/v1   # API version for Ingress resource (networking.k8s.io/v1 is the stable version)
+kind: Ingress                       # Resource type - Ingress manages external HTTP/HTTPS access to services
+metadata:                           # Metadata section - contains identifying information
+  name: example-ingress            # Name of the Ingress (must be unique within namespace)
+  namespace: default               # Namespace where Ingress will be created (optional, defaults to 'default')
+  labels:                          # Labels are key-value pairs used for selecting and organizing resources
+    app: web                       # Label: application name
+    ingress: main                  # Label: ingress type
+  annotations:                     # Annotations are metadata that don't affect resource behavior
+    # Ingress controller specific annotations (varies by controller):
+    
+    # NGINX Ingress Controller annotations:
+    # Note: kubernetes.io/ingress.class annotation is DEPRECATED (Kubernetes 1.18+)
+    # Use spec.ingressClassName instead (see below)
+    # kubernetes.io/ingress.class: "nginx"  # DEPRECATED: Use spec.ingressClassName instead
+    nginx.ingress.kubernetes.io/rewrite-target: /  # Rewrite target path
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"  # Redirect HTTP to HTTPS
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"  # Force SSL redirect
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"  # Backend protocol: HTTP, HTTPS, GRPC
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"  # Maximum request body size
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"  # Proxy connect timeout (seconds)
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"  # Proxy send timeout (seconds)
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"  # Proxy read timeout (seconds)
+    nginx.ingress.kubernetes.io/rate-limit: "100"  # Rate limit (requests per minute)
+    nginx.ingress.kubernetes.io/limit-connections: "10"  # Connection limit
+    nginx.ingress.kubernetes.io/limit-rps: "100"  # Requests per second limit
+    nginx.ingress.kubernetes.io/limit-rpm: "1000"  # Requests per minute limit
+    nginx.ingress.kubernetes.io/auth-type: basic  # Authentication type: basic, digest
+    nginx.ingress.kubernetes.io/auth-secret: basic-auth  # Secret for authentication
+    nginx.ingress.kubernetes.io/auth-realm: "Authentication Required"  # Authentication realm
+    nginx.ingress.kubernetes.io/enable-cors: "true"  # Enable CORS
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"  # CORS allowed origins
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"  # CORS allowed methods
+    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range"  # CORS allowed headers
+    nginx.ingress.kubernetes.io/enable-rewrite-log: "true"  # Enable rewrite log
+    nginx.ingress.kubernetes.io/configuration-snippet: |  # Custom configuration snippet
+      more_set_headers "X-Custom-Header: value";
+    nginx.ingress.kubernetes.io/server-snippet: |  # Custom server block snippet
+      location /custom {
+        return 200 "Custom response";
+      }
+    
+    # Traefik Ingress Controller annotations:
+    # traefik.ingress.kubernetes.io/rule-type: PathPrefix  # Rule type
+    # traefik.ingress.kubernetes.io/priority: "10"  # Priority
+    
+    # AWS ALB Ingress Controller annotations:
+    # alb.ingress.kubernetes.io/scheme: internet-facing  # Scheme: internet-facing or internal
+    # alb.ingress.kubernetes.io/target-type: ip  # Target type: ip or instance
+    # alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'  # Listen ports
+    # alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS-1-2-2017-01  # SSL policy
+    # alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:...  # Certificate ARN
+    # alb.ingress.kubernetes.io/load-balancer-name: my-alb  # Load balancer name
+    # alb.ingress.kubernetes.io/healthcheck-path: /health  # Health check path
+    # alb.ingress.kubernetes.io/healthcheck-interval-seconds: "30"  # Health check interval
+    # alb.ingress.kubernetes.io/healthcheck-timeout-seconds: "5"  # Health check timeout
+    # alb.ingress.kubernetes.io/healthy-threshold-count: "2"  # Healthy threshold
+    # alb.ingress.kubernetes.io/unhealthy-threshold-count: "3"  # Unhealthy threshold
+    # alb.ingress.kubernetes.io/success-codes: "200"  # Success codes
+    # alb.ingress.kubernetes.io/tags: Environment=production,Team=platform  # Tags
+    
+    # GKE Ingress Controller annotations:
+    # kubernetes.io/ingress.global-static-ip-name: my-static-ip  # Static IP name
+    # networking.gke.io/managed-certificates: my-cert  # Managed certificate
+    # networking.gke.io/v1beta1.FrontendConfig: my-frontend-config  # Frontend config
+    
+    # Generic annotations:
+    description: "Example Ingress"  # Custom annotation: human-readable description
+spec:                               # Specification section - defines desired state
+  ingressClassName: nginx          # Ingress class name (Kubernetes 1.18+)
+                                    # Specifies which ingress controller should handle this Ingress
+                                    # Replaces deprecated annotation kubernetes.io/ingress.class
+  defaultBackend:                  # Default backend (optional)
+                                    # Handles requests that don't match any rule
+    service:                       # Service backend
+      name: default-backend        # Service name
+      port:                        # Service port
+        number: 80                 # Port number
+    # Alternative: resource backend (Kubernetes 1.18+)
+    # resource:
+    #   apiVersion: v1
+    #   kind: ConfigMap
+    #   name: default-backend
+  rules:                           # List of ingress rules
+  - host: example.com              # Hostname (optional, matches all hosts if omitted)
+                                    # Requests to this hostname will be handled by this rule
+    http:                          # HTTP rule
+      paths:                       # List of paths
+      - path: /api                 # Path (must start with /)
+        pathType: Prefix           # Path type: Exact, Prefix, ImplementationSpecific
+                                    # Exact: exact match
+                                    # Prefix: prefix match (longest prefix wins)
+                                    # ImplementationSpecific: implementation-specific matching
+        backend:                   # Backend for this path
+          service:                 # Service backend
+            name: api-service      # Service name
+            port:                  # Service port
+              number: 8080         # Port number (alternative: name: "http")
+      - path: /web                 # Another path
+        pathType: Prefix           # Path type: Prefix
+        backend:                   # Backend for this path
+          service:                 # Service backend
+            name: web-service      # Service name
+            port:                  # Service port
+              number: 80           # Port number
+      - path: /                    # Root path (catch-all)
+        pathType: Prefix           # Path type: Prefix
+        backend:                   # Backend for this path
+          service:                 # Service backend
+            name: default-service  # Service name
+            port:                  # Service port
+              number: 80           # Port number
+  - host: api.example.com          # Another hostname
+    http:                          # HTTP rule
+      paths:                       # List of paths
+      - path: /                    # Root path
+        pathType: Prefix           # Path type: Prefix
+        backend:                   # Backend for this path
+          service:                 # Service backend
+            name: api-service      # Service name
+            port:                  # Service port
+              number: 8080         # Port number
+  tls:                             # TLS configuration (optional)
+  - hosts:                         # List of hosts (must match host in rules)
+    - example.com                  # Hostname 1
+    - www.example.com              # Hostname 2
+    secretName: tls-secret         # Secret name containing TLS certificate and key
+                                    # Secret must contain keys: tls.crt and tls.key
+  - hosts:                         # Another TLS configuration
+    - api.example.com              # Hostname
+    secretName: api-tls-secret     # Secret name
+
+---
+# Example: Ingress with multiple hosts and paths
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: multi-host-ingress
+  namespace: default
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: example.com
+    http:
+      paths:
+      - path: /api(/|$)(.*)        # Path with capture group
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: api-service
+            port:
+              number: 8080
+  - host: app.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: app-service
+            port:
+              number: 80
+  tls:
+  - hosts:
+    - example.com
+    - app.example.com
+    secretName: wildcard-tls-secret
+
+---
+# Example: Ingress with resource backend (Kubernetes 1.18+)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: resource-backend-ingress
+  namespace: default
+spec:
+  ingressClassName: nginx
+  defaultBackend:
+    resource:
+      apiVersion: v1
+      kind: ConfigMap
+      name: default-backend
+  rules:
+  - http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          resource:
+            apiVersion: v1
+            kind: ConfigMap
+            name: custom-backend
+
+---
+# Example: Ingress without host (matches all hosts)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: catch-all-ingress
+  namespace: default
+spec:
+  ingressClassName: nginx
+  rules:
+  - http:                          # No host specified, matches all hosts
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: default-service
+            port:
+              number: 80
+
+---
+# Example: Ingress with path-based routing
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: path-based-ingress
+  namespace: default
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /$1
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: example.com
+    http:
+      paths:
+      - path: /users/(.*)          # Path with capture group
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: user-service
+            port:
+              number: 8080
+      - path: /products/(.*)       # Another path with capture group
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: product-service
+            port:
+              number: 8081
+

@@ -1,0 +1,188 @@
+apiVersion: autoscaling.k8s.io/v1     # API version for VerticalPodAutoscaler resource (autoscaling.k8s.io/v1)
+kind: VerticalPodAutoscaler           # Resource type - VPA automatically adjusts pod resource requests/limits
+metadata:                              # Metadata section - contains identifying information
+  name: nginx-vpa                     # Name of the VPA (must be unique within namespace)
+  namespace: default                  # Namespace where VPA will be created (optional, defaults to 'default')
+  labels:                             # Labels are key-value pairs used for selecting and organizing resources
+    app: nginx                        # Label: application name
+    autoscaler: vpa                   # Label: autoscaler type
+  annotations:                        # Annotations are metadata that don't affect resource behavior
+    description: "VPA for nginx"      # Custom annotation: human-readable description
+spec:                                  # Specification section - defines desired state
+  targetRef:                          # Reference to the resource to scale (required)
+    apiVersion: apps/v1               # API version of target resource
+    kind: Deployment                  # Kind of target resource: Deployment, StatefulSet, etc.
+    name: nginx-deployment            # Name of target resource (must exist in same namespace)
+  updatePolicy:                       # Update policy (optional)
+    updateMode: Auto                  # Update mode: Off, Initial, Recreate, or Auto (default: Auto)
+                                    # Off: don't update, only provide recommendations
+                                    # Initial: set resources on pod creation only
+                                    # Recreate: restart pods when recommendations change
+                                    # Auto: automatically update resources (requires VPA recommender)
+  resourcePolicy:                     # Resource policy (optional)
+    containerPolicies:                # Container-specific policies
+    - containerName: nginx            # Container name
+      minAllowed:                     # Minimum allowed resources
+        cpu: "100m"                   # Minimum CPU (100m = 0.1 CPU cores)
+        memory: "128Mi"               # Minimum memory (128Mi = 128 mebibytes)
+      maxAllowed:                     # Maximum allowed resources
+        cpu: "2"                      # Maximum CPU (2 CPU cores)
+        memory: "4Gi"                 # Maximum memory (4Gi = 4 gibibytes)
+      controlledResources:            # Resources controlled by VPA (optional)
+      - cpu                           # Control CPU
+      - memory                        # Control memory
+      controlledValues: RequestsAndLimits  # Controlled values: RequestsAndLimits, RequestsOnly
+                                    # RequestsAndLimits: control both requests and limits
+                                    # RequestsOnly: control only requests
+    - containerName: sidecar          # Another container
+      mode: Off                       # Mode: Off (don't control this container)
+  # Note: VPA requires VPA controller to be installed in the cluster
+  # VPA is not part of standard Kubernetes, it's an addon
+
+---
+# Example: VPA with Off mode (recommendations only)
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: nginx-vpa-off
+  namespace: default
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: nginx-deployment
+  updatePolicy:
+    updateMode: Off                   # Don't update, only provide recommendations
+                                    # Check recommendations with: kubectl describe vpa nginx-vpa-off
+
+---
+# Example: VPA with Initial mode
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: nginx-vpa-initial
+  namespace: default
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: nginx-deployment
+  updatePolicy:
+    updateMode: Initial               # Set resources on pod creation only
+                                    # Won't update existing pods
+
+---
+# Example: VPA with Recreate mode
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: nginx-vpa-recreate
+  namespace: default
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: nginx-deployment
+  updatePolicy:
+    updateMode: Recreate              # Restart pods when recommendations change
+                                    # Pods will be recreated with new resource values
+
+---
+# Example: VPA with resource constraints
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: nginx-vpa-constrained
+  namespace: default
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: nginx-deployment
+  updatePolicy:
+    updateMode: Auto
+  resourcePolicy:
+    containerPolicies:
+    - containerName: nginx
+      minAllowed:                     # Minimum allowed resources
+        cpu: "200m"
+        memory: "256Mi"
+      maxAllowed:                     # Maximum allowed resources
+        cpu: "4"
+        memory: "8Gi"
+      controlledResources:            # Control both CPU and memory
+      - cpu
+      - memory
+      controlledValues: RequestsAndLimits  # Control both requests and limits
+
+---
+# Example: VPA controlling only requests
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: nginx-vpa-requests-only
+  namespace: default
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: nginx-deployment
+  updatePolicy:
+    updateMode: Auto
+  resourcePolicy:
+    containerPolicies:
+    - containerName: nginx
+      controlledResources:
+      - cpu
+      - memory
+      controlledValues: RequestsOnly  # Control only requests, not limits
+
+---
+# Example: VPA excluding specific containers
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: nginx-vpa-exclude
+  namespace: default
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: nginx-deployment
+  updatePolicy:
+    updateMode: Auto
+  resourcePolicy:
+    containerPolicies:
+    - containerName: nginx
+      mode: Auto                      # Auto mode for nginx container
+    - containerName: sidecar
+      mode: Off                       # Off mode for sidecar (don't control)
+
+---
+# Example: VPA for StatefulSet
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: database-vpa
+  namespace: default
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: StatefulSet                 # Target: StatefulSet
+    name: mysql-statefulset
+  updatePolicy:
+    updateMode: Recreate              # Recreate mode (safer for stateful workloads)
+  resourcePolicy:
+    containerPolicies:
+    - containerName: mysql
+      minAllowed:
+        cpu: "500m"
+        memory: "1Gi"
+      maxAllowed:
+        cpu: "4"
+        memory: "8Gi"
+      controlledResources:
+      - cpu
+      - memory
+      controlledValues: RequestsAndLimits
+

@@ -1,0 +1,280 @@
+apiVersion: apps/v1                    # API version for Deployment resource (apps/v1 is the stable version)
+kind: Deployment                        # Resource type - Deployment manages ReplicaSets and Pods
+metadata:                               # Metadata section - contains identifying information
+  name: nginx-deployment               # Name of the Deployment (must be unique within namespace)
+  namespace: default                   # Namespace where Deployment will be created (optional, defaults to 'default')
+  labels:                              # Labels are key-value pairs used for selecting and organizing resources
+    app: nginx                         # Label: application name
+    version: v1                        # Label: version identifier
+    environment: production           # Label: environment type
+  annotations:                         # Annotations are metadata that don't affect resource behavior
+    deployment.kubernetes.io/revision: "1"  # Annotation: revision number (managed by Kubernetes)
+    description: "Nginx web server deployment"  # Custom annotation: human-readable description
+spec:                                   # Specification section - defines desired state
+  replicas: 3                          # Number of pod replicas to maintain (default: 1)
+  strategy:                            # Deployment strategy for updates
+    type: RollingUpdate                # Strategy type: RollingUpdate (gradual) or Recreate (all at once)
+    rollingUpdate:                     # Configuration for rolling update strategy
+      maxSurge: 1                      # Maximum number of pods that can be created above desired replicas (can be number or percentage like "25%")
+      maxUnavailable: 0                # Maximum number of pods that can be unavailable during update (can be number or percentage)
+  revisionHistoryLimit: 10             # Number of old ReplicaSets to retain for rollback (default: 10)
+  progressDeadlineSeconds: 600         # Maximum time in seconds to wait for Deployment to progress before reporting failure (default: 600)
+  selector:                            # Label selector - pods matching these labels are managed by this Deployment
+    matchLabels:                       # Match pods with exact label matches
+      app: nginx                       # Pods must have label app=nginx
+    matchExpressions:                  # Advanced selector using expressions (optional)
+      - key: environment               # Label key to match
+        operator: In                   # Operator: In, NotIn, Exists, DoesNotExist
+        values:                        # Values for In/NotIn operators
+          - production
+          - staging
+  template:                            # Pod template - defines how pods should be created
+    metadata:                          # Metadata for pods created from this template
+      labels:                          # Labels applied to pods (must match selector)
+        app: nginx                     # Must match selector.matchLabels
+        version: v1                    # Version label
+        environment: production       # Environment label
+      annotations:                     # Annotations for pods
+        prometheus.io/scrape: "true"   # Example: Prometheus scraping annotation
+        prometheus.io/port: "80"       # Example: Prometheus port annotation
+    spec:                              # Pod specification
+      containers:                      # List of containers to run in the pod
+      - name: nginx                    # Container name (must be unique within pod)
+        image: nginx:1.21.6           # Container image (Docker image name and tag)
+        imagePullPolicy: IfNotPresent # When to pull image: Always, Never, IfNotPresent (default: IfNotPresent)
+        ports:                         # Container ports to expose
+        - name: http                   # Port name (useful for service discovery)
+          containerPort: 80            # Port number inside container
+          protocol: TCP                # Protocol: TCP, UDP, or SCTP (default: TCP)
+        - name: https                  # Second port example
+          containerPort: 443
+          protocol: TCP
+        env:                           # Environment variables for the container
+        - name: ENV_VAR_1              # Environment variable name
+          value: "value1"              # Literal value
+        - name: ENV_VAR_2              # Another environment variable
+          valueFrom:                   # Get value from another source
+            configMapKeyRef:           # Reference to ConfigMap
+              name: app-config         # ConfigMap name
+              key: config-key          # Key in ConfigMap
+              optional: false          # Whether ConfigMap is optional (default: false)
+        - name: SECRET_VAR             # Environment variable from Secret
+          valueFrom:
+            secretKeyRef:              # Reference to Secret
+              name: app-secret         # Secret name
+              key: secret-key          # Key in Secret
+              optional: false          # Whether Secret is optional
+        envFrom:                       # Load all environment variables from ConfigMap/Secret
+        - configMapRef:                # Reference to entire ConfigMap
+            name: app-config           # ConfigMap name
+            optional: false            # Whether ConfigMap is optional
+        - secretRef:                   # Reference to entire Secret
+            name: app-secret           # Secret name
+            optional: false            # Whether Secret is optional
+        resources:                     # Resource requests and limits
+          requests:                    # Minimum resources required (scheduler uses this)
+            cpu: "100m"                # CPU request (100m = 0.1 CPU cores, can use "1" for 1 core)
+            memory: "128Mi"            # Memory request (128Mi = 128 mebibytes, can use "1Gi" for 1 gibibyte)
+          limits:                      # Maximum resources allowed (container killed if exceeded)
+            cpu: "500m"                # CPU limit (500m = 0.5 CPU cores)
+            memory: "512Mi"            # Memory limit (512Mi = 512 mebibytes)
+        volumeMounts:                  # Mount volumes into container filesystem
+        - name: config-volume          # Volume name (must match volumes.name)
+          mountPath: /etc/nginx/conf.d  # Path inside container where volume is mounted
+          readOnly: true               # Mount as read-only (default: false)
+          subPath: nginx.conf          # Mount specific file/directory from volume (optional)
+        - name: data-volume            # Another volume mount
+          mountPath: /var/www/html
+          readOnly: false              # Read-write mount
+        livenessProbe:                 # Probe to check if container is alive (restarts if fails)
+          httpGet:                     # HTTP GET probe
+            path: /health              # HTTP path to check
+            port: 80                   # Port to check
+            scheme: HTTP               # Scheme: HTTP or HTTPS (default: HTTP)
+            httpHeaders:               # Custom HTTP headers (optional)
+            - name: Custom-Header
+              value: "value"
+          initialDelaySeconds: 30     # Seconds to wait before first probe (default: 0)
+          periodSeconds: 10            # Seconds between probes (default: 10)
+          timeoutSeconds: 5            # Seconds before probe times out (default: 1)
+          successThreshold: 1          # Consecutive successes needed to mark as healthy (default: 1)
+          failureThreshold: 3          # Consecutive failures needed to mark as unhealthy (default: 3)
+        readinessProbe:                # Probe to check if container is ready to serve traffic
+          httpGet:                     # HTTP GET probe
+            path: /ready               # HTTP path to check
+            port: 80                   # Port to check
+          initialDelaySeconds: 5       # Seconds to wait before first probe
+          periodSeconds: 5             # Seconds between probes
+          timeoutSeconds: 3            # Seconds before probe times out
+          successThreshold: 1          # Consecutive successes needed
+          failureThreshold: 3          # Consecutive failures needed
+        startupProbe:                  # Probe to check if container has started (Kubernetes 1.16+)
+          httpGet:                     # HTTP GET probe
+            path: /startup             # HTTP path to check
+            port: 80                   # Port to check
+          initialDelaySeconds: 0       # Seconds to wait before first probe
+          periodSeconds: 10            # Seconds between probes
+          timeoutSeconds: 3            # Seconds before probe times out
+          failureThreshold: 30         # Maximum number of failures before container is killed
+        securityContext:               # Security settings for container
+          runAsNonRoot: true           # Container must run as non-root user (default: false)
+          runAsUser: 1000             # UID to run container as (optional)
+          runAsGroup: 1000            # GID to run container as (optional)
+          allowPrivilegeEscalation: false  # Prevent privilege escalation (default: true)
+          readOnlyRootFilesystem: false    # Mount root filesystem as read-only (default: false)
+          capabilities:                # Linux capabilities to add/remove
+            add:                       # Capabilities to add
+            - NET_BIND_SERVICE         # Example: allow binding to privileged ports
+            drop:                      # Capabilities to drop
+            - ALL                      # Drop all capabilities, then add only what's needed
+          privileged: false           # Run container in privileged mode (default: false)
+        command:                       # Override container entrypoint (optional)
+        - nginx
+        - -g
+        - "daemon off;"
+        args:                          # Override container command arguments (optional)
+        - -c
+        - /etc/nginx/nginx.conf
+        workingDir: /usr/share/nginx/html  # Working directory for container (optional)
+        stdin: true                    # Keep stdin open (default: false)
+        tty: true                      # Allocate TTY (default: false)
+        terminationMessagePath: /dev/termination-log  # Path to termination message file (default: /dev/termination-log)
+        terminationMessagePolicy: File # Termination message policy: File or FallbackToLogsOnError
+      initContainers:                  # Init containers run before main containers (optional)
+      - name: init-myservice           # Init container name
+        image: busybox:1.35            # Init container image
+        command:                       # Command to run
+        - sh
+        - -c
+        - "echo Initializing..."
+      volumes:                         # Volumes available to containers in pod
+      - name: config-volume            # Volume name (referenced in volumeMounts)
+        configMap:                     # Volume from ConfigMap
+          name: nginx-config           # ConfigMap name
+          items:                       # Specific keys to include (optional, includes all if omitted)
+          - key: nginx.conf            # Key in ConfigMap
+            path: nginx.conf           # Path in volume
+            mode: 0644                 # File permissions (octal)
+          defaultMode: 0644           # Default file permissions for all items
+          optional: false             # Whether ConfigMap is optional
+      - name: data-volume              # Another volume
+        emptyDir:                      # Temporary directory shared between containers
+          sizeLimit: 1Gi               # Size limit (optional)
+      - name: secret-volume            # Secret volume example
+        secret:                        # Volume from Secret
+          secretName: nginx-secret     # Secret name
+          items:                       # Specific keys to include (optional)
+          - key: tls.crt               # Key in Secret
+            path: tls.crt              # Path in volume
+            mode: 0600                 # File permissions
+          defaultMode: 0644           # Default file permissions
+          optional: false             # Whether Secret is optional
+      - name: pvc-volume               # PersistentVolumeClaim volume example
+        persistentVolumeClaim:         # Volume from PVC
+          claimName: nginx-pvc        # PVC name
+          readOnly: false             # Mount as read-only (default: false)
+      restartPolicy: Always            # Pod restart policy: Always, OnFailure, Never (default: Always)
+      terminationGracePeriodSeconds: 30  # Seconds to wait for graceful shutdown (default: 30)
+      activeDeadlineSeconds: 3600      # Maximum seconds pod can be active (optional, kills pod if exceeded)
+      dnsPolicy: ClusterFirst          # DNS policy: ClusterFirst, ClusterFirstWithHostNet, Default, None
+      dnsConfig:                       # Custom DNS configuration (optional)
+        nameservers:                   # Custom DNS servers
+        - 8.8.8.8
+        searches:                      # DNS search domains
+        - default.svc.cluster.local
+        - svc.cluster.local
+        - cluster.local
+        options:                       # DNS resolver options
+        - name: ndots
+          value: "2"
+      hostname: nginx-pod              # Pod hostname (optional, defaults to pod name)
+      subdomain: nginx                 # Pod subdomain (optional)
+      hostAliases:                     # Custom hostname-to-IP mappings (optional)
+      - ip: "127.0.0.1"
+        hostnames:
+        - "foo.local"
+        - "bar.local"
+      hostNetwork: false               # Use host network namespace (default: false)
+      hostPID: false                   # Use host PID namespace (default: false)
+      hostIPC: false                   # Use host IPC namespace (default: false)
+      shareProcessNamespace: false     # Share process namespace between containers (default: false)
+      securityContext:                 # Security settings for pod (applies to all containers)
+        runAsNonRoot: true            # Pod must run as non-root user
+        runAsUser: 1000              # UID to run pod as
+        runAsGroup: 1000             # GID to run pod as
+        fsGroup: 2000                # GID for volumes (default: root)
+        fsGroupChangePolicy: Always  # When to change ownership: Always, OnRootMismatch
+        seccompProfile:              # Seccomp profile (optional)
+          type: RuntimeDefault       # Type: RuntimeDefault, Localhost, Unconfined
+        supplementalGroups:          # Additional groups for volumes (optional)
+        - 2000
+        sysctls:                     # Sysctl settings (optional)
+        - name: net.core.somaxconn
+          value: "1024"
+      nodeSelector:                    # Node selection constraints (optional)
+        disktype: ssd                 # Node must have label disktype=ssd
+        zone: us-west-1a              # Node must have label zone=us-west-1a
+      affinity:                        # Advanced scheduling constraints (optional)
+        nodeAffinity:                 # Node affinity rules
+          requiredDuringSchedulingIgnoredDuringExecution:  # Hard requirement
+            nodeSelectorTerms:        # List of node selector terms (OR logic)
+            - matchExpressions:       # Match expressions (AND logic)
+              - key: kubernetes.io/os
+                operator: In
+                values:
+                - linux
+          preferredDuringSchedulingIgnoredDuringExecution:  # Soft preference
+          - weight: 100               # Weight (1-100) for preference
+            preference:
+              matchExpressions:
+              - key: disktype
+                operator: In
+                values:
+                - ssd
+        podAffinity:                  # Pod affinity rules
+          requiredDuringSchedulingIgnoredDuringExecution:  # Hard requirement
+          - labelSelector:            # Pods that must be co-located
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - nginx
+            topologyKey: kubernetes.io/hostname  # Topology key (e.g., hostname, zone)
+          preferredDuringSchedulingIgnoredDuringExecution:  # Soft preference
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app: nginx
+              topologyKey: kubernetes.io/hostname
+        podAntiAffinity:              # Pod anti-affinity rules (spread pods apart)
+          requiredDuringSchedulingIgnoredDuringExecution:  # Hard requirement
+          - labelSelector:
+              matchLabels:
+                app: nginx
+            topologyKey: kubernetes.io/hostname
+          preferredDuringSchedulingIgnoredDuringExecution:  # Soft preference
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app: nginx
+              topologyKey: kubernetes.io/hostname
+      tolerations:                     # Tolerations for tainted nodes (optional)
+      - key: "key1"                   # Taint key
+        operator: Equal               # Operator: Equal or Exists
+        value: "value1"               # Taint value (required if operator is Equal)
+        effect: NoSchedule            # Taint effect: NoSchedule, PreferNoSchedule, NoExecute
+        tolerationSeconds: 3600       # Seconds to tolerate NoExecute taint (optional)
+      priorityClassName: high-priority  # Priority class name (optional, for preemption)
+      schedulerName: default-scheduler  # Custom scheduler name (optional, default: default-scheduler)
+      runtimeClassName: gvisor         # Runtime class name (optional, for different runtimes)
+      overhead:                        # Resource overhead for runtime (optional)
+        cpu: "100m"
+        memory: "128Mi"
+      enableServiceLinks: true         # Create environment variables for services (default: true)
+      preemptionPolicy: PreemptLowerPriority  # Preemption policy: Never or PreemptLowerPriority
+      setHostnameAsFQDN: false         # Set hostname as FQDN (default: false)
+      os:                              # Operating system (optional)
+        name: linux                    # OS name: linux or windows
+
